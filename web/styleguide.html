@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Style guide · PhishVerse</title>
+<script>try{var t=localStorage.getItem('pv-theme');if(t==='light'||t==='dark')document.documentElement.dataset.theme=t}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Mono:wght@400;600&family=Atkinson+Hyperlegible+Next:wght@400;500;700;800&family=Pixelify+Sans:wght@500;700&display=swap">
+<link rel="stylesheet" href="css/tokens.css">
+<link rel="stylesheet" href="css/base.css">
+<link rel="stylesheet" href="css/components.css">
+<link rel="stylesheet" href="css/portal.css">
+<style>
+  /* style-guide page layout only */
+  .sg{min-height:100vh;background:var(--paper)}
+  .sg-top{position:sticky;top:0;z-index:20;display:flex;flex-wrap:wrap;align-items:center;gap:var(--s-4);padding:var(--s-3) var(--s-5);background:var(--paper);border-bottom:1px solid var(--line)}
+  .sg-top h1{flex:1;min-width:200px;font-size:var(--t-xl)}
+  .sg-intro{padding:var(--s-5);max-width:var(--measure);color:var(--ink-2)}
+  .sg-cols{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+  .sg-col{background:var(--paper);color:var(--ink);padding:var(--s-5);display:grid;gap:var(--s-5);align-content:start;min-width:0}
+  .sg-col + .sg-col{border-left:1px solid var(--line)}
+  .sg-col > h2{font-family:var(--font-display);font-size:var(--t-2xl)}
+  .sg-sec{display:grid;gap:var(--s-3)}
+  .sg-sec > h3{font-size:var(--t-xs);font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-2)}
+  .sg-row{display:flex;flex-wrap:wrap;align-items:center;gap:var(--s-3)}
+  .sg-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:var(--s-3)}
+  .sg-swatch{display:grid;grid-template-columns:36px minmax(0,1fr);align-items:center;gap:var(--s-2);font-size:var(--t-xs)}
+  .sg-swatch i{width:36px;height:36px;border-radius:var(--r-sm);border:1px solid var(--line)}
+  .sg-swatch b{display:block;font-family:var(--font-mono);font-weight:600}
+  .sg-type > *{margin:0}
+  .sg-cap{font-size:var(--t-xs);color:var(--ink-2)}
+  .sg-force-focus{outline:2px solid var(--info)!important;outline-offset:2px}
+  @media (max-width:1099px){.sg-cols{grid-template-columns:minmax(0,1fr)}.sg-col + .sg-col{border-left:0;border-top:1px solid var(--line)}}
+  @media (max-width:767px){.sg-top{padding:var(--s-3) var(--s-4)}.sg-intro{padding:var(--s-4)}.sg-col{padding:var(--s-4)}}
+</style>
+</head>
+<body>
+<div class="sg ds">
+  <header class="sg-top">
+    <a class="brand" href="./">
+      <span class="mark" aria-hidden="true"><svg viewBox="0 0 46 52" fill="none"><path d="M23 3 41 9.5v14.2c0 11.4-7.4 20-18 24.8C12.4 43.7 5 35.1 5 23.7V9.5L23 3Z" fill="currentColor"/><path class="mark-check" d="M14.5 26.5l6 6L32 20.5" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+      <span class="wordmark">PhishVerse</span>
+    </a>
+    <h1 class="display">Style guide</h1>
+    <div id="themeSlot"></div>
+  </header>
+  <p class="sg-intro">Every portal component in light and dark, side by side. Rules live in <code>docs/UI_GUIDE.md</code>; styles in <code>web/css/</code>; helpers in <code>web/js/ui.js</code>. Hover, press and tab through anything to see its states.</p>
+  <main class="sg-cols" id="cols"></main>
+</div>
+<div id="ui-layer" class="ds"></div>
+<script src="js/ui.js"></script>
+<script>
+(function(){
+  const I=UI.icon,A=UI.avatarHTML;
+  const TOKENS=['paper','surface','surface-2','ink','ink-2','line','gold','gold-ink','safe','caution','danger','info'];
+  const pill=(tone,ic,t)=>`<span class="status-pill"${tone?` data-tone="${tone}"`:''}>${I(ic)}${t}</span>`;
+  const skill=(name,v)=>{const band=v>=80?['Strong','safe','check']:v>=60?['Watch','caution','dash']:['Weak','danger','alert'];
+    return`<div class="skill"><span class="skill-name">${name}</span><span class="skill-value">${v}%</span>${pill(band[1],band[2],band[0])}<div class="progress" data-tone="${band[1]}" aria-hidden="true"><i style="--p:${v/100}"></i></div></div>`};
+  const C=2*Math.PI*42;
+  function gallery(theme){
+    const id=s=>s+'-'+theme;
+    return`<h2>${theme==='light'?'Light':'Dark'}</h2>
+    <section class="sg-sec"><h3>Colour tokens</h3><div class="sg-grid">${TOKENS.map(t=>`<div class="sg-swatch"><i style="background:var(--${t})"></i><span><b>--${t}</b></span></div>`).join('')}</div></section>
+    <section class="sg-sec sg-type"><h3>Type</h3>
+      <p class="display" style="font-size:var(--t-result)">82%</p>
+      <p class="display" style="font-size:var(--t-display)">Office Orientation</p>
+      <p style="font-size:var(--t-xl);font-weight:800">Assign training</p>
+      <p style="font-size:var(--t-md)">Body text in Atkinson Hyperlegible Next, built so similar letters can't be confused: Il1 O0 rn m.</p>
+      <p class="label">Label · uppercase · 0.75rem</p>
+      <p>Mono for data: ${UI.renderAddr('it-security@novacorp.com')}</p></section>
+    <section class="sg-sec"><h3>Buttons</h3>
+      <div class="sg-row"><button class="button button--primary" type="button">Start the test</button><button class="button button--secondary" type="button">Save default plan</button><button class="button button--quiet" type="button">View all</button><button class="button button--danger" type="button">${I('trash','icon--sm')}Remove</button></div>
+      <div class="sg-row"><button class="button button--primary sg-force-focus" type="button">Focus</button><button class="button button--primary" type="button" disabled>Disabled</button><button class="button button--primary" type="button" aria-busy="true">Loading</button><button class="button button--secondary" type="button" aria-busy="true">Loading</button></div>
+      <div class="sg-row"><button class="button button--secondary button--sm" type="button">Replay</button><button class="button button--primary" type="button">Start${I('play','icon--sm')}</button><button class="button button--quiet button--icon" type="button" aria-label="Close">${I('close')}</button><button class="button button--secondary button--icon" type="button" aria-label="Search">${I('search')}</button></div></section>
+    <section class="sg-sec"><h3>Status pills</h3><div class="sg-row">${pill('','circle','Not started')}${pill('info','clock','In progress')}${pill('safe','check','Passed')}${pill('danger','alert','Failed')}${pill('danger','alert','Overdue')}${pill('caution','clock','Due soon')}</div></section>
+    <section class="sg-sec"><h3>Chips and avatars</h3>
+      <div class="sg-row"><span class="person-chip">${A('Meera Iyer',{size:'sm'})}<span>Meera Iyer</span></span><span class="person-chip">${A('Rohan Das',{size:'sm'})}<span>Rohan Das</span></span></div>
+      <div class="sg-row"><span class="score-chip" data-state="done">${I('check')}L1 · 92%</span><span class="score-chip" data-state="bad">${I('alert')}L2 · 55%</span><span class="score-chip">${I('circle')}L3</span></div>
+      <div class="sg-row">${A('Aarav Mehta',{size:'sm'})}${A('Sara Khan')}${A('Kavya Rao',{size:'lg'})}${A('Arjun Nair')}${A('Priya S')}</div></section>
+    <section class="sg-sec"><h3>Fields</h3>
+      <div class="field"><label class="field-label" for="${id('f1')}">Full name</label><input class="input" id="${id('f1')}" placeholder="Kavya Rao"></div>
+      <div class="field"><label class="field-label" for="${id('f2')}">Team <small>(optional)</small></label><input class="input" id="${id('f2')}" aria-describedby="${id('f2h')}"><span class="field-hint" id="${id('f2h')}">For example Finance or Sales.</span></div>
+      <div class="field"><label class="field-label" for="${id('f3')}">Email</label><input class="input" id="${id('f3')}" value="kavya@novacorp" aria-invalid="true" aria-describedby="${id('f3e')}"><span class="field-error" id="${id('f3e')}">${I('alert')}<span>Please enter a valid email address, like kavya@novacorp.com.</span></span></div>
+      <div class="field"><label class="field-label" for="${id('f4')}">Organisation</label><input class="input" id="${id('f4')}" value="NovaCorp" disabled></div>
+      <div class="field"><label class="field-label" for="${id('f5')}">Due after</label><select class="select" id="${id('f5')}"><option>7 days</option><option selected>14 days</option><option>30 days</option></select></div>
+      <div class="field"><label class="field-label" for="${id('f6')}">Note</label><textarea class="input" id="${id('f6')}" placeholder="Please finish before the quarterly review."></textarea></div></section>
+    <section class="sg-sec"><h3>Checkboxes</h3><div class="option-list">
+      <label class="check"><input type="checkbox"><span>L1 · Office Orientation<small>Physical red flags · 6 min</small></span></label>
+      <label class="check"><input type="checkbox" checked><span>L2 · Inbox Defense<small>Email phishing · 8 min</small></span></label>
+      <label class="check"><input type="checkbox" disabled><span>L5 · Executive Fraud<small>Unlocks later</small></span></label>
+      <label class="check"><input type="checkbox" aria-invalid="true"><span>I've read the policy<small>Required</small></span></label></div></section>
+    <section class="sg-sec"><h3>Segmented control and tabs</h3>
+      <div class="sg-row"><div class="segmented" role="group" aria-label="Sample"><button type="button" aria-pressed="true">Manager</button><button type="button" aria-pressed="false">Employee</button></div>${UI.themeSwitch()}</div>
+      <div class="tabs" role="tablist" aria-label="Sample tabs"><button class="tab" role="tab" type="button" aria-selected="true">Journey</button><button class="tab" role="tab" type="button" aria-selected="false">Skills</button><button class="tab" role="tab" type="button" aria-selected="false">Certificates</button><button class="tab" role="tab" type="button" aria-selected="false" disabled>Later</button></div></section>
+    <section class="sg-sec"><h3>Table</h3><div class="panel panel--flush"><div class="table-scroll" style="--table-max:260px"><table class="table table--stack"><thead><tr><th scope="col">Person</th><th scope="col">Status</th><th scope="col" class="num">Score</th></tr></thead><tbody>
+      ${[['Aarav Mehta','Sales','info','clock','In progress',79],['Sara Khan','Finance','danger','alert','Overdue',100],['Rohan Das','Engineering','safe','check','Completed',74]].map(r=>`<tr><td><div class="person">${A(r[0])}<div><b>${r[0]}</b><small>${r[1]}</small></div></div></td><td>${pill(r[2],r[3],r[4])}</td><td class="num">${r[5]}%</td></tr>`).join('')}</tbody></table></div></div></section>
+    <section class="sg-sec"><h3>Progress</h3>
+      <div class="progress" aria-hidden="true"><i style="--p:.62"></i></div>
+      <div class="sg-row"><div class="ring" role="img" aria-label="62% complete"><svg viewBox="0 0 100 100"><circle class="ring-track" cx="50" cy="50" r="42"/><circle class="ring-fill" cx="50" cy="50" r="42" stroke-dasharray="${C}" stroke-dashoffset="${C*.38}"/></svg><b>62%</b></div><span class="sg-cap">Progress ring</span></div>
+      ${skill('Spotting lookalike domains',86)}${skill('Urgent phone calls',64)}${skill('MFA fatigue',41)}</section>
+    <section class="sg-sec"><h3>Inspected text</h3>
+      <p>Sender: ${UI.renderAddr('payroll@novac0rp.com',{flag:true})}</p>
+      <p>Link: ${UI.renderAddr('https://rnicrosoft-login.help/verify',{flag:true})}</p>
+      <p>Genuine: ${UI.renderAddr('hr@novacorp.com')}</p></section>
+    <section class="sg-sec"><h3>Next-step marker and live dot</h3>
+      <div class="sg-row"><span class="next-marker" aria-hidden="true"></span><b>Start Level 2</b><span class="sg-cap">One per screen</span></div>
+      <div class="sg-row"><span class="live-indicator"><i></i>Live</span><span class="live-indicator" data-state="off"><i></i>Offline</span></div></section>
+    <section class="sg-sec"><h3>Banner</h3>
+      <div class="banner">${I('info')}<div><b>Demo mode.</b> Sample data only, nothing is saved.</div></div>
+      <div class="banner" data-tone="caution">${I('clock')}<div><b>Due in 2 days.</b> Two modules left.</div></div></section>
+    <section class="sg-sec"><h3>Empty state and skeleton</h3>
+      <div class="panel">${`<div class="empty-state empty-state--compact"><span class="empty-icon">${I('users','icon--lg')}</span><h3>No one has joined yet</h3><p>Employees appear here as soon as they create an account.</p><button type="button" class="button button--secondary">Copy sign-up link</button></div>`}</div>
+      <div class="panel" style="display:grid;gap:10px"><div class="sg-row"><span class="skeleton skeleton--circle"></span><span class="skeleton skeleton--title" style="flex:1"></span></div><span class="skeleton skeleton--text"></span><span class="skeleton skeleton--text" style="--w:70%"></span></div></section>
+    <section class="sg-sec"><h3>Drawer, modal, toast</h3><div class="sg-row">
+      <button class="button button--secondary" type="button" data-demo="drawer">Open drawer</button>
+      <button class="button button--secondary" type="button" data-demo="modal">Open confirmation</button>
+      <button class="button button--secondary" type="button" data-demo="toast">Show toast</button>
+      <button class="button button--secondary" type="button" data-demo="error">Show error toast</button></div></section>`;
+  }
+  document.getElementById('themeSlot').innerHTML=UI.themeSwitch();
+  document.getElementById('cols').innerHTML=`<div class="sg-col" data-theme="light">${gallery('light')}</div><div class="sg-col" data-theme="dark">${gallery('dark')}</div>`;
+  document.addEventListener('click',async e=>{const b=e.target.closest('[data-demo]');if(!b)return;const k=b.dataset.demo;
+    if(k==='drawer'){UI.openDrawer({title:'Meera Iyer',body:`<div class="drawer-person">${A('Meera Iyer',{size:'lg'})}<div><h3>Meera Iyer</h3><p>People &amp; HR · joined 3 Oct 2026</p></div></div><div class="drawer-section"><span class="label">Plan</span><dl class="dl"><dt>Status</dt><dd>${pill('info','clock','In progress')}</dd><dt>Modules</dt><dd>L1, L2</dd></dl></div>`,footer:'<button type="button" class="button button--danger">Remove assignment</button>'})}
+    if(k==='modal'){const ok=await UI.confirmModal({title:"Remove Meera's assignment?",body:'Their results stay. If a default plan is set, they move to it.',confirm:'Remove assignment',danger:true});UI.toast(ok?'Assignment removed':'Kept the assignment',{type:ok?'success':'info'})}
+    if(k==='toast')UI.toast('Assigned to 3 people',{description:'2 modules, due 31 Oct.'});
+    if(k==='error')UI.toast('Could not save the default plan',{type:'error',description:'Check your connection and try again.'});
+  });
+})();
+</script>
+</body>
+</html>

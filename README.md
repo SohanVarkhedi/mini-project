@@ -28,11 +28,18 @@ phishverse-local/
 ├── requirements-dev.txt # + pytest and Playwright
 └── web/
     ├── index.html       # portal + game page
-    ├── styles.css
+    ├── styleguide.html  # every portal component, light and dark (/styleguide.html)
+    ├── css/
+    │   ├── tokens.css     # colours (light + dark), type, spacing, radii, motion
+    │   ├── base.css       # reset + portal typography
+    │   ├── components.css # buttons, fields, tables, drawer, toast, ...
+    │   ├── portal.css     # sign-in, manager and employee layouts
+    │   └── game.css       # the game's styles (unchanged look)
     └── js/
         ├── core.js      # map, characters, props, office artwork
         ├── content.js   # levels, scenarios, NPCs, object placement
         ├── engine.js    # movement, rendering, highlights, dialog, encounters, audio
+        ├── ui.js        # design-system helpers: toast, drawer, confirm, inspected text, theme
         └── portal.js    # manager/employee portal + data layer
 ```
 
@@ -94,12 +101,12 @@ Or pick the manager login before the first run with environment variables
 
 ## Try the whole flow
 
-1. Sign in as the manager. You'll see the team dashboard.
+1. Sign in as the manager. You'll see the team overview.
 2. In a **private/incognito window** (or on your phone, see `--lan` below),
    open http://localhost:5000, choose
    **Create account** and register an employee.
-3. Back in the manager window, refresh. Tick the new employee, pick modules
-   and a due date, then click **Assign**.
+3. Back in the manager window, refresh. Under **Assign training**, tick the
+   new employee, pick modules and a due date, then click **Assign**.
 4. In the employee window, refresh and click **Start** on Level 1.
 5. Finish the level, talk to Ada, and the score is saved. The manager's
    dashboard shows it within about 10 seconds, or immediately after a refresh.
@@ -132,6 +139,13 @@ a phone. If the phone can't connect:
 `--lan` binds to `0.0.0.0` (all network interfaces). `--host 0.0.0.0` does the
 same without printing the LAN address. Do this only on a network you trust:
 this is a development server, not a hardened production setup.
+
+## Light and dark
+
+The portal follows your device's light or dark setting. To choose one, use the
+theme switch in the manager's top bar or on the employee **Profile** page. The
+choice is saved in that browser. The game is always dark. See every component
+at http://localhost:5000/styleguide.html.
 
 ## Quick look without Python
 
@@ -169,8 +183,13 @@ pytest tests/e2e        # browser test only; add --headed to watch it
 ```
 
 The tests use a temporary database, so they never touch `phishverse.db`. The
-browser test starts its own server on a free port and drives two browser
+browser tests start their own server on a free port. One drives two browser
 windows at once: a manager on a 1440×900 laptop and an employee on a phone.
+The other takes screenshots of the sign-in, manager overview, employee journey,
+demo mode and style guide at 390×844 and 1440×900, in light and dark, and saves
+them to `test-results/screens/`. It also checks there is no sideways scrolling,
+every button and link shows a focus ring, and phone touch targets are at least
+44 px.
 
 Database changes go in a new numbered file in `migrations/` (for example
 `0002_certificates.sql`). The server applies new files in order at startup and

@@ -1,0 +1,122 @@
+/* PhishVerse design tokens (docs/UI_GUIDE.md §3, §4, §7). Portal only: the game keeps its own (game.css).
+   Theme: light by default, dark via the OS setting unless <html data-theme="light">, or forced by
+   data-theme="dark". data-theme also works on any element (the style guide shows both side by side). */
+:root,[data-theme="light"]{
+  /* colour: UI_GUIDE §3 */
+  --paper:#F2F4F7;
+  --surface:#FFFFFF;
+  --surface-2:#E8ECF1;
+  --ink:#13203A;
+  --ink-2:#4B5870;
+  --line:#D6DCE5;
+  --gold:#E3A21A;
+  --gold-ink:#3A2800;
+  --safe:#1D8A57;
+  --caution:#B86E00;
+  --danger:#C23B3B;
+  --info:#2B65D9;
+  /* derived: text-on-surface variants (≥ 4.5:1) and soft tints for pills and banners */
+  --safe-text:#17724A;    --safe-soft:#E2F3EA;
+  --caution-text:#8A5300; --caution-soft:#FBEFD9;
+  --danger-text:#A83232;  --danger-soft:#FBE6E6;
+  --info-text:#2459C2;    --info-soft:#E3ECFC;
+  --gold-soft:#FCF0D2;
+  --av-bg:55% 90%;--av-fg:55% 24%;
+  --scrim:rgba(19,32,58,.42);
+  --shadow-1:0 1px 2px rgba(19,32,58,.06),0 1px 1px rgba(19,32,58,.04);
+  --shadow-2:0 12px 32px rgba(19,32,58,.16),0 2px 6px rgba(19,32,58,.08);
+  color-scheme:light;
+
+}
+/* type, spacing, radius, sizing, motion: theme-independent, so only on :root */
+:root{
+  /* type: UI_GUIDE §2, §4 */
+  --font-ui:"Atkinson Hyperlegible Next","Atkinson Hyperlegible",system-ui,sans-serif;
+  --font-mono:"Atkinson Hyperlegible Mono",ui-monospace,Menlo,Consolas,monospace;
+  --font-display:"Pixelify Sans","Atkinson Hyperlegible Next",system-ui,sans-serif;
+  --t-xs:.75rem;
+  --t-sm:.875rem;
+  --t-md:1rem;
+  --t-lg:1.125rem;
+  --t-xl:1.375rem;
+  --t-2xl:1.75rem;
+  --t-display:2.25rem;
+  --t-result:3rem;
+  --lh-body:1.5;
+  --lh-display:1.15;
+
+  /* spacing (px): 4 · 8 · 12 · 16 · 24 · 32 · 48 · 64 */
+  --s-1:4px; --s-2:8px; --s-3:12px; --s-4:16px; --s-5:24px; --s-6:32px; --s-7:48px; --s-8:64px;
+
+  /* radius */
+  --r-sm:6px;   /* inputs, chips */
+  --r-md:10px;  /* panels */
+  --r-pill:999px;
+
+  /* sizing: control height; touch targets grow to 44px on phones and touch screens */
+  --hit:38px;
+  --measure:65ch;
+
+  /* motion: UI_GUIDE §7 */
+  --ease-out:cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out:cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-drawer:cubic-bezier(0.32, 0.72, 0, 1);
+  --d-press:120ms;
+  --d-pop:200ms;
+  --d-exit:140ms;
+  --d-drawer:280ms;
+  --d-move:320ms;
+}
+@media (max-width:767px),(pointer:coarse){
+  :root{--hit:44px}
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --paper:#0D1522;
+    --surface:#141F31;
+    --surface-2:#1B2940;
+    --ink:#E7ECF4;
+    --ink-2:#9DAAC0;
+    --line:#26344D;
+    --gold:#F2B53A;
+    --gold-ink:#2A1D00;
+    --safe:#3CCB86;
+    --caution:#F0A23C;
+    --danger:#FF6E6E;
+    --info:#73A7FF;
+    --safe-text:#3CCB86;    --safe-soft:#13362A;
+    --caution-text:#F0A23C; --caution-soft:#3A2A12;
+    --danger-text:#FF6E6E;  --danger-soft:#3D1A22;
+    --info-text:#73A7FF;    --info-soft:#16294A;
+    --gold-soft:#3A2C0E;
+    --av-bg:32% 26%;--av-fg:70% 88%;
+    --scrim:rgba(3,7,14,.62);
+    --shadow-1:0 1px 2px rgba(0,0,0,.3);
+    --shadow-2:0 16px 40px rgba(0,0,0,.5),0 2px 8px rgba(0,0,0,.3);
+    color-scheme:dark;
+  }
+}
+[data-theme="dark"]{
+  --paper:#0D1522;
+  --surface:#141F31;
+  --surface-2:#1B2940;
+  --ink:#E7ECF4;
+  --ink-2:#9DAAC0;
+  --line:#26344D;
+  --gold:#F2B53A;
+  --gold-ink:#2A1D00;
+  --safe:#3CCB86;
+  --caution:#F0A23C;
+  --danger:#FF6E6E;
+  --info:#73A7FF;
+  --safe-text:#3CCB86;    --safe-soft:#13362A;
+  --caution-text:#F0A23C; --caution-soft:#3A2A12;
+  --danger-text:#FF6E6E;  --danger-soft:#3D1A22;
+  --info-text:#73A7FF;    --info-soft:#16294A;
+  --gold-soft:#3A2C0E;
+  --av-bg:32% 26%;--av-fg:70% 88%;
+  --scrim:rgba(3,7,14,.62);
+  --shadow-1:0 1px 2px rgba(0,0,0,.3);
+  --shadow-2:0 16px 40px rgba(0,0,0,.5),0 2px 8px rgba(0,0,0,.3);
+  color-scheme:dark;
+}

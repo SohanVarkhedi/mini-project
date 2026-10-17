@@ -80,7 +80,7 @@ def test_manager_and_employee_on_two_devices(server_url, desktop, phone):
     mgr.fill("#aEmail", "manager@novacorp.local")
     mgr.fill("#aPw", "manager123")
     mgr.click("#authBtn")
-    expect(mgr.locator("h1.pg")).to_have_text("Team training")
+    expect(mgr.locator("#pageTitle")).to_have_text("Overview")
 
     # Employee registers on the phone.
     emp.goto(server_url)
@@ -90,12 +90,12 @@ def test_manager_and_employee_on_two_devices(server_url, desktop, phone):
     emp.fill("#aEmail", EMPLOYEE["email"])
     emp.fill("#aPw", EMPLOYEE["password"])
     emp.locator("#authBtn").tap()
-    expect(emp.locator(".hero h1")).to_contain_text("Hi Kavya")
+    expect(emp.locator("#greetH")).to_have_text("Hi Kavya")
     expect(emp.locator("#roleChip")).to_have_text("Employee")
 
     # Manager sees the new employee and assigns two modules.
     mgr.reload()
-    pick = mgr.locator("label.pick", has_text=EMPLOYEE["name"])
+    pick = mgr.locator("#assignForm label.check", has_text=EMPLOYEE["name"])
     expect(pick).to_be_visible()
     pick.locator("input[data-sel]").check()
     for lid in ("orientation", "inbox"):
@@ -103,15 +103,16 @@ def test_manager_and_employee_on_two_devices(server_url, desktop, phone):
     for lid in ("signals", "access", "executive"):
         mgr.locator(f'input[data-lv="{lid}"]').uncheck()
     mgr.click("#assignBtn")
-    expect(mgr.locator("#assignNote")).to_have_text("Assigned to 1 person.")
-    row = mgr.locator(".mrow", has_text=EMPLOYEE["name"])
-    expect(row.locator(".mchip")).to_have_text(["L1", "L2"])
+    expect(mgr.locator(".toast-item")).to_contain_text("Assigned to 1 person")
+    row = mgr.locator("tr[data-person]", has_text=EMPLOYEE["name"])
+    expect(row.locator(".score-chip")).to_have_text(["L1", "L2"])
 
     # Employee sees the assignment and starts Level 1.
     emp.reload()
-    expect(emp.locator(".trail .step")).to_have_count(2)
-    start = emp.locator('.trail [data-play="orientation"]')
-    expect(start).to_have_text("Start ▶")
+    expect(emp.locator(".journey .j-step")).to_have_count(2)
+    start = emp.locator('.journey [data-play="orientation"]')
+    expect(start).to_have_text("Start")
+    expect(emp.locator(".next-marker")).to_have_count(1)  # one gold marker, on the next step
     start.tap()
     expect(emp.locator("#game")).to_be_visible()
     emp.wait_for_function("() => window.G && window.G.level.id === 'orientation'")
@@ -125,13 +126,13 @@ def test_manager_and_employee_on_two_devices(server_url, desktop, phone):
     expect(emp.locator("#savedNote")).to_have_text("Saved to your training record.")
     emp.locator("#resBack").tap()
     expect(emp.locator("#portal")).to_be_visible()
-    expect(emp.locator('.trail .step.done')).to_have_count(1)
+    expect(emp.locator('.j-step[data-state="done"]')).to_have_count(1)
 
     # Manager dashboard shows the score chip.
     mgr.reload()
-    row = mgr.locator(".mrow", has_text=EMPLOYEE["name"])
-    expect(row.locator(".mchip.done")).to_have_text("L1 · 90%")
-    expect(row.locator(".state")).to_contain_text("In progress")
+    row = mgr.locator("tr[data-person]", has_text=EMPLOYEE["name"])
+    expect(row.locator('.score-chip[data-state="done"]')).to_have_text("L1 · 90%")
+    expect(row.locator('[data-col="status"]')).to_contain_text("In progress")
 
     assert mgr_errors == []
     assert emp_errors == []
@@ -144,7 +145,7 @@ def test_file_demo_mode_starts_a_level(desktop):
     expect(page.locator(".banner")).to_contain_text("Demo mode (opened as a file).")
     expect(page.locator("#demoSeg")).to_be_visible()
     page.click('#demoSeg [data-r="emp"]')
-    page.click('.trail [data-play="orientation"]')
+    page.click('.journey [data-play="orientation"]')
     expect(page.locator("#game")).to_be_visible()
     page.wait_for_function("() => window.G && window.G.level.id === 'orientation'")
     expect(page.locator("#dlg")).to_be_visible()  # intro dialog

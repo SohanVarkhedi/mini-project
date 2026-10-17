@@ -1,17 +1,20 @@
 /* =========================================================
-   PORTAL: data layer (db + user capabilities, demo fallback) + views
+   PORTAL: data layer (local server / live artifact / demo) + shells and views.
+   Layout and components follow docs/UI_GUIDE.md; helpers come from ui.js (UI.*).
    ========================================================= */
 const BADGE={orientation:'Sharp Eye',inbox:'Inbox Guardian',signals:'Signal Keeper',access:'Gatekeeper',executive:'Fraud Buster'};
 const Store={ready:false,mode:'demo',me:{id:'me',name:'',avatar:''},isMgr:true,canWrite:true,db:null,user:null,
   members:{},assignments:{},progress:{},config:{defaultLevels:[],defaultDueDays:14},myMember:null,myAssign:null,myProg:null,profiles:{}};
-let tab='team';const draft={sel:new Set(),levels:new Set(['orientation','inbox']),due:'',note:'',defLevels:null,defDays:null,joinName:'',joinDept:'',msgA:'',msgD:''};
+const draft={sel:new Set(),levels:new Set(['orientation','inbox']),due:'',note:'',defLevels:null,defDays:null,joinName:'',joinDept:'',search:''};
 const dayMs=864e5,todayISO=()=>new Date().toISOString().slice(0,10);
 const addDaysISO=(ms,d)=>new Date(ms+d*dayMs).toISOString().slice(0,10);
 const fmtDate=iso=>{if(!iso)return'';const d=new Date(iso+'T12:00:00');return d.toLocaleDateString(undefined,{month:'short',day:'numeric'})};
+const fmtDay=ms=>ms?new Date(ms).toLocaleDateString(undefined,{day:'numeric',month:'short',year:'numeric'}):'';
 const ago=ms=>{if(!ms)return'never';const m=Math.round((Date.now()-ms)/6e4);if(m<2)return'just now';if(m<60)return m+' min ago';const h=Math.round(m/60);if(h<24)return h+' h ago';return Math.round(h/24)+' d ago'};
-function initialsAv(name,col){const ini=(name||'?').split(/\s+/).map(w=>w[0]||'').join('').slice(0,2).toUpperCase();return'data:image/svg+xml;utf8,'+encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect width="64" height="64" rx="32" fill="${col||'#2f6b4a'}"/><text x="32" y="41" font-family="Inter,Arial" font-size="24" font-weight="700" fill="#fff" text-anchor="middle">${ini}</text></svg>`)}
-const COLS=['#2f6b4a','#7c3aed','#0e7490','#b45309','#be123c','#1d4ed8','#4d7c0f'];
-const avatarFor=(id,name)=>Store.profiles[id]&&Store.profiles[id].avatarUrl||initialsAv(name,COLS[(hash(String(id).length,String(id).charCodeAt(2)||0)*COLS.length)|0]);
+const plural=(n,one,many)=>n===1?one:(many||one+'s');
+const icon=UI.icon;
+function avatarFor(id,name,size){const url=Store.profiles[id]&&Store.profiles[id].avatarUrl||(id===Store.me.id&&Store.me.avatar);
+  if(url)return`<img class="avatar${size?' avatar--'+size:''}" src="${esc(url)}" alt="">`;return UI.avatarHTML(name,{size,seed:id})}
 
 /* ---------- effective assignment / progress helpers ---------- */
 function assignFor(uid,member,assign){
@@ -27,6 +30,9 @@ function statusOf(a,prog){
   if(a.due&&a.due<todayISO())return{k:'late',t:'Overdue',done};
   return{k:done?'go':'',t:done?'In progress':'Not started',done};
 }
+const STATUS_UI={none:['','dash'],'':['','circle'],go:['info','clock'],ok:['safe','check'],late:['danger','alert']};
+const statusPill=st=>{const[tone,ic]=STATUS_UI[st.k]||STATUS_UI[''];return`<span class="status-pill"${tone?` data-tone="${tone}"`:''}>${icon(ic)}${st.t}</span>`};
+const OUT_UI={safe:['safe','check'],acceptable:['caution','dash'],false_alarm:['info','info'],compromise:['danger','alert']};
 
 /* ---------- demo data ---------- */
 function initDemo(){
@@ -39,7 +45,7 @@ function initDemo(){
     a2:{levels:{orientation:mk(100,{usb:'safe',qr:'safe',sticky:'safe',laptop:'safe'})},lastActive:now-4*dayMs},
     a3:{levels:{orientation:mk(55,{usb:'compromise',qr:'compromise',sticky:'safe',laptop:'acceptable'}),inbox:mk(93,{e1:'safe',e2:'safe',e3:'safe',e4:'safe',e5:'safe',e6:'acceptable'})},lastActive:now-8*3600e3}};
   Store.config={defaultLevels:['orientation','inbox'],defaultDueDays:14};
-  syncMine();Store.ready=true;$('demoSeg').hidden=false;renderPortal();
+  syncMine();Store.ready=true;renderPortal();
 }
 function syncMine(){const id=Store.me.id;if(Store.mode==='demo'){Store.myMember=Store.members[id]||null;Store.myAssign=Store.assignments[id]||null;Store.myProg=Store.progress[id]||null}}
 
@@ -72,7 +78,7 @@ async function write(path,data){
   try{if(data===null)await Store.db.doc(path).delete();else await Store.db.doc(path).set(data);return true}catch(e){console.warn('write failed',path,e&&e.code);return e&&e.code||'error'}
 }
 
-/* ---------- local server mode (Flask + SQLite, see server.py) ---------- */
+/* ---------- local server mode (Flask + SQLite, see phishverse/) ---------- */
 let authMode='login';
 const API=(p,opt={})=>fetch('api/'+p,Object.assign({credentials:'same-origin',headers:{'Content-Type':'application/json'}},opt)).then(async r=>{let j=null;try{j=await r.json()}catch(e){}if(!r.ok)throw Object.assign(new Error((j&&j.error)||r.statusText),{status:r.status});return j});
 async function initLocal(){
@@ -84,7 +90,7 @@ async function initLocal(){
   setInterval(()=>{if(Store.authed&&$('game').hidden&&!document.hidden)loadLocalState().catch(()=>{})},10000);
   return true;
 }
-function setLocalMe(me){Store.authed=true;Store.me={id:me.id,name:me.name,avatar:'',email:me.email};Store.isMgr=me.role==='manager';tab=Store.isMgr?'team':'me'}
+function setLocalMe(me){Store.authed=true;Store.me={id:me.id,name:me.name,avatar:'',email:me.email,dept:me.dept};Store.isMgr=me.role==='manager'}
 async function loadLocalState(){const s=await API('state');Store.config=Object.assign({defaultLevels:[],defaultDueDays:14},s.config||{});
   if(Store.isMgr){Store.members=s.members||{};Store.assignments=s.assignments||{};Store.progress=s.progress||{}}
   Store.myMember=s.myMember||null;Store.myAssign=s.myAssign||null;Store.myProg=s.myProg||null;scheduleRender()}
@@ -94,21 +100,8 @@ async function writeLocal(path,data){const[c,id]=path.split('/');
     else if(c==='progress')await API('progress',{method:'PUT',body:JSON.stringify(data)});
     else if(c==='members')await API('profile',{method:'PUT',body:JSON.stringify(data)});
     loadLocalState().catch(()=>{});return true}catch(e){return e.status===403?'invalid_argument':'error'}}
-function authView(){const reg=authMode==='register';
-  return`<div class="card joinc" data-keep><div class="seg" id="authSeg" style="margin-bottom:16px"><button type="button" data-am="login" class="${reg?'':'on'}">Sign in</button><button type="button" data-am="register" class="${reg?'on':''}">Create account</button></div>
-   <h2 style="font:700 24px/1.15 var(--display);margin:0 0 6px">${reg?"Join your team's training":'Sign in to PhishVerse'}</h2><p class="sub" style="font-size:13.5px">${reg?'Create an employee account. Your manager will see you on the team dashboard.':'Managers and employees sign in here.'}</p>
-   <form id="authForm" novalidate>${reg?`<label class="f" for="aName">Full name</label><input class="inp" id="aName" maxlength="60" autocomplete="name" required>
-   <label class="f" for="aDept">Team or department</label><input class="inp" id="aDept" maxlength="40" placeholder="e.g. Finance">`:''}
-   <label class="f" for="aEmail">Email</label><input class="inp" id="aEmail" type="email" maxlength="120" autocomplete="email" required>
-   <label class="f" for="aPw">Password</label><input class="inp" id="aPw" type="password" minlength="8" autocomplete="${reg?'new-password':'current-password'}" required>
-   <button class="btn wide" type="submit" id="authBtn">${reg?'Create account':'Sign in'}</button><div class="note" id="authNote"></div></form></div>`}
-function bindAuth(){
-  const sg=$('authSeg');sg&&sg.addEventListener('click',e=>{const b=e.target.closest('[data-am]');if(!b)return;authMode=b.dataset.am;renderPortal()});
-  const f=$('authForm');f&&f.addEventListener('submit',async e=>{e.preventDefault();const note=$('authNote'),btn=$('authBtn');btn.disabled=true;note.textContent='';
-    const body={email:$('aEmail').value.trim(),password:$('aPw').value};if(authMode==='register'){body.name=$('aName').value.trim();body.dept=$('aDept').value.trim()}
-    try{setLocalMe(await API(authMode,{method:'POST',body:JSON.stringify(body)}));await loadLocalState();renderPortal()}catch(err){note.textContent=err.message||'Something went wrong.';btn.disabled=false}});
-}
-async function logoutLocal(){try{await API('logout',{method:'POST',body:'{}'})}catch(e){}Store.authed=false;Store.members={};Store.assignments={};Store.progress={};Store.myMember=Store.myAssign=Store.myProg=null;Store.me={id:'',name:'',avatar:''};renderPortal()}
+async function logoutLocal(){try{await API('logout',{method:'POST',body:'{}'})}catch(e){}Store.authed=false;Store.members={};Store.assignments={};Store.progress={};Store.myMember=Store.myAssign=Store.myProg=null;Store.me={id:'',name:'',avatar:''};
+  if(location.hash)history.replaceState(null,'',location.pathname+location.search);renderPortal()}
 let progQ=Promise.resolve();
 onLevelComplete=(lid,s)=>{
   progQ=progQ.then(async()=>{
@@ -123,112 +116,311 @@ onLevelComplete=(lid,s)=>{
 };
 window.onGameExit=()=>renderPortal();
 
-/* ---------- views ---------- */
-const view=$('view');
-function header(){
-  const m=Store.me;$('meName').textContent=m.name||'You';$('meAv').src=m.avatar||initialsAv(m.name||'You');
-  const mgr=Store.isMgr;$('roleChip').textContent=mgr?'Manager':'Employee';$('roleChip').classList.toggle('emp',!mgr);
-  $('demoSeg').querySelectorAll('button').forEach(b=>b.classList.toggle('on',(b.dataset.r==='mgr')===mgr));
+/* =========================================================
+   ROUTING + SHELLS
+   ========================================================= */
+const MGR_PAGES=[['overview','Overview','overview'],['people','People','people'],['programs','Programs','programs'],['reports','Reports','reports',1],['settings','Settings','settings',1]];
+const MGR_TRAINING=['training','My training','play'];
+const EMP_PAGES=[['journey','Journey','journey'],['skills','Skills','skills'],['certificates','Certificates','certificate'],['profile','Profile','profile']];
+function pagesFor(){return Store.isMgr?[...MGR_PAGES,MGR_TRAINING]:EMP_PAGES}
+function currentPage(){const h=location.hash.replace(/^#\/?/,'');const ps=pagesFor();return ps.some(p=>p[0]===h)?h:ps[0][0]}
+addEventListener('hashchange',()=>{setMenu(false);renderPortal();window.scrollTo(0,0);const v=$('view');v&&v.focus({preventScroll:true})});
+
+const app=$('app');let shellKey='',lastPage='';const animated=new Set();
+const demoSwitch=()=>Store.mode==='demo'?`<div class="segmented role-switch" id="demoSeg" role="group" aria-label="Preview as">${[['mgr','Manager'],['emp','Employee']].map(([k,l])=>`<button type="button" data-r="${k}" aria-pressed="${(k==='mgr')===Store.isMgr}">${l}</button>`).join('')}</div>`:'';
+const signOutBtn=(cls='')=>Store.mode==='local'?`<button type="button" class="button button--quiet signout ${cls}" data-signout>${icon('logout')}<span>Sign out</span></button>`:'';
+const navItem=([k,l,ic,soon])=>`<a class="nav-item" href="#${k}" data-nav="${k}" title="${l}">${icon(ic)}<span class="nav-label">${l}</span>${soon?'<span class="soon">Soon</span>':''}</a>`;
+const roleName=()=>Store.isMgr?'Manager':'Employee';
+
+function mgrShell(){
+  return`<div class="m-shell">
+  <aside class="rail" aria-label="Main navigation"><div class="rail-inner">
+    <a class="brand" href="#overview" aria-label="PhishVerse overview">${UI.mark()}<span><span class="wordmark">PhishVerse</span><small>NovaCorp · Security training</small></span></a>
+    <nav class="nav-list" aria-label="Manager pages">${MGR_PAGES.map(navItem).join('')}</nav>
+    <div class="rail-foot"><span class="label rail-section">Your own training</span>${navItem(MGR_TRAINING)}</div>
+  </div></aside>
+  <div class="m-main">
+    <header class="topbar">
+      <button type="button" class="button button--quiet button--icon menu-btn" id="menuBtn" aria-expanded="false" aria-controls="topMenu" aria-label="Open menu">${icon('menu')}</button>
+      <h1 class="page-title" id="pageTitle">Overview</h1>
+      <div class="topbar-tools">
+        ${Store.mode==='local'?'<span class="live-indicator" title="Updates every 10 seconds"><i></i>Live</span>':''}
+        ${demoSwitch()}${UI.themeSwitch()}
+        <div class="account">${avatarFor(Store.me.id,Store.me.name)}<div class="me-text"><b id="meName"></b><small id="roleChip">${roleName()}</small></div></div>
+        ${signOutBtn()}
+      </div>
+    </header>
+    <div class="top-menu" id="topMenu" hidden>
+      <nav class="nav-list" aria-label="Manager pages">${[...MGR_PAGES,MGR_TRAINING].map(navItem).join('')}</nav>
+      <div class="top-menu-row">${UI.themeSwitch()}${demoSwitch().replace('id="demoSeg"','')}${signOutBtn()}</div>
+    </div>
+    <main class="m-content" id="view" tabindex="-1"></main>
+  </div></div>`;
 }
+function empShell(){
+  return`<div class="e-shell">
+  <header class="e-top"><div class="e-top-inner${Store.mode==='demo'?' has-demo':''}">
+    <a class="brand" href="#journey" aria-label="PhishVerse journey">${UI.mark()}<span class="wordmark">PhishVerse</span></a>
+    <nav class="e-nav" aria-label="Your pages">${EMP_PAGES.map(([k,l])=>`<a class="tab" href="#${k}" data-nav="${k}">${l}</a>`).join('')}</nav>
+    <div class="e-tools">${demoSwitch()}<a class="me-link" href="#profile" aria-label="Your profile" title="Your profile">${avatarFor(Store.me.id,Store.me.name)}</a><span class="sr-only" id="roleChip">${roleName()}</span></div>
+  </div></header>
+  <main class="e-content" id="view" tabindex="-1"></main>
+  <nav class="bottom-nav" aria-label="Your pages">${EMP_PAGES.map(([k,l,ic])=>`<a href="#${k}" data-nav="${k}">${icon(ic)}<span>${l}</span></a>`).join('')}</nav>
+  </div>`;
+}
+function setMenu(open){const m=$('topMenu'),b=$('menuBtn');if(!m||!b)return;m.hidden=!open;b.setAttribute('aria-expanded',String(open));b.setAttribute('aria-label',open?'Close menu':'Open menu');b.innerHTML=icon(open?'close':'menu')}
+function bindShell(){
+  app.querySelectorAll('[data-signout]').forEach(b=>b.addEventListener('click',logoutLocal));
+  app.querySelectorAll('[data-r]').forEach(b=>b.addEventListener('click',()=>{if(Store.mode!=='demo')return;Store.isMgr=b.dataset.r==='mgr';history.replaceState(null,'',location.pathname+location.search);renderPortal()}));
+  const mb=$('menuBtn');mb&&mb.addEventListener('click',()=>setMenu($('topMenu').hidden));
+}
+const PAGE_TITLE={overview:'Overview',people:'People',programs:'Programs',reports:'Reports',settings:'Settings',training:'My training',journey:'Journey',skills:'Skills',certificates:'Certificates',profile:'Profile'};
+
 function renderPortal(){
-  header();
-  if(!Store.ready){view.innerHTML=`<div class="empty" style="padding:80px 10px"><b>Loading your training…</b>Connecting to your team's records.</div>`;return}
-  $('logoutBtn').hidden=!(Store.mode==='local'&&Store.authed);
-  if(Store.mode==='local'&&!Store.authed){$('roleChip').hidden=true;view.innerHTML=authView();bindAuth();return}
-  $('roleChip').hidden=false;
-  const mgr=Store.isMgr;if(!mgr)tab='me';
-  const tabs=mgr?`<nav class="tabs" role="tablist">${[['team','Team dashboard'],['modules','Modules'],['me','My training']].map(([k,l])=>`<button type="button" role="tab" data-tab="${k}" class="${tab===k?'on':''}" aria-selected="${tab===k}">${l}</button>`).join('')}</nav>`:'';
-  const banner=Store.mode==='demo'&&location.protocol==='file:'?`<div class="banner"><span>ℹ️</span><div><b>Demo mode (opened as a file).</b> Sample data only, nothing is saved. Run <code>python server.py</code> and open <b>http://localhost:5000</b> for real accounts and saved progress.</div></div>`:Store.mode==='demo'?`<div class="banner"><span>ℹ️</span><div><b>Demo mode.</b> You're seeing sample team data. Open this page from your Claude account to manage a real team; switch between Manager and Employee at the top to preview both sides.</div></div>`:'';
-  view.innerHTML=banner+tabs+(tab==='team'&&mgr?teamView():tab==='modules'&&mgr?modulesView():meView());
-  bindView();
+  if(!Store.ready){if(shellKey!=='loading'){app.innerHTML=loadingView();shellKey='loading'}return}
+  if(Store.mode==='local'&&!Store.authed){const k='auth:'+authMode;if(shellKey!==k){const keep=readAuthDraft();app.innerHTML=authView();bindAuth(keep);shellKey=k}return}
+  const key=(Store.isMgr?'mgr':'emp')+'|'+Store.mode+'|'+Store.me.id;
+  if(shellKey!==key){app.innerHTML=Store.isMgr?mgrShell():empShell();bindShell();shellKey=key;lastPage=''}
+  const page=currentPage();
+  app.querySelectorAll('[data-nav]').forEach(a=>{if(a.dataset.nav===page)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current')});
+  const t=$('pageTitle');if(t)t.textContent=PAGE_TITLE[page];document.title=`${PAGE_TITLE[page]} · PhishVerse`;
+  const nm=$('meName');if(nm)nm.textContent=Store.me.name||'You';
+  const first=!animated.has(page);animated.add(page);
+  const view=$('view');view.innerHTML=banner()+pageHTML(page);
+  if(first)view.querySelectorAll('[data-stagger]').forEach(el=>{el.classList.add('stagger');[...el.children].forEach((c,i)=>c.style.setProperty('--i',Math.min(i,10)))});
+  bindView(view,page);lastPage=page;
 }
+function pageHTML(p){
+  switch(p){
+    case'overview':return overviewPage();case'people':return peoplePage();case'programs':return programsPage();
+    case'reports':return comingSoon('reports','Skills reports will appear here',"Each person's strong areas and weak spots, and where the whole team needs practice, built from their decisions in the game.",'See team progress','#overview');
+    case'settings':return comingSoon('settings','Settings will appear here',"Your organisation's name, the final-test pass mark and who can manage training. The default plan for new joiners is on Overview.",'Edit the default plan','#overview');
+    case'training':return journeyPage();
+    case'journey':return journeyPage();
+    case'skills':return comingSoon('skills','Your skills report appears here',"Finish your assigned modules to see where you're strong and which kinds of scam to practise.",'Go to your journey','#journey');
+    case'certificates':return comingSoon('certificate','Your certificate appears here','Pass the final test to earn a certificate your manager can verify.','Go to your journey','#journey');
+    case'profile':return profilePage();
+  }
+  return'';
+}
+function banner(){
+  if(Store.mode!=='demo')return'';
+  if(location.protocol==='file:')return`<div class="banner">${icon('info')}<div><b>Demo mode (opened as a file).</b> Sample data only, nothing is saved. Run <code>python server.py</code> and open <b>http://localhost:5000</b> for real accounts and saved progress.</div></div>`;
+  return`<div class="banner">${icon('info')}<div><b>Demo mode.</b> You're seeing sample team data. Switch between Manager and Employee at the top to preview both sides.</div></div>`;
+}
+const emptyState=(ic,title,text,action='',compact)=>`<div class="empty-state${compact?' empty-state--compact':''}"><span class="empty-icon">${icon(ic,'icon--lg')}</span><h3>${title}</h3><p>${text}</p>${action}</div>`;
+const comingSoon=(ic,title,text,cta,href)=>`<section class="panel">${emptyState(ic,title,text,`<a class="button button--secondary" href="${href}">${cta}${icon('arrow','icon--sm')}</a>`)}</section>`;
+function loadingView(){return`<div class="loading-screen ds" role="status" aria-live="polite"><div>${UI.mark(true)}<span class="skeleton skeleton--title" style="--w:70%"></span><span class="skeleton skeleton--text"></span><span class="skeleton skeleton--text" style="--w:80%"></span><span class="sr-only">Loading your training…</span></div></div>`}
+
+/* =========================================================
+   SIGN-IN / CREATE ACCOUNT
+   ========================================================= */
+function readAuthDraft(){const g=id=>{const el=$(id);return el?el.value:''};return{email:g('aEmail'),name:g('aName'),dept:g('aDept')}}
+function field(id,label,input,{hint='',optional}={}){return`<div class="field"><label class="field-label" for="${id}">${label}${optional?' <small>(optional)</small>':''}</label>${input}${hint?`<span class="field-hint" id="${id}Hint">${hint}</span>`:''}<span class="field-error" id="${id}Err" role="alert"></span></div>`}
+function authView(){const reg=authMode==='register';
+  return`<div class="auth"><div class="auth-inner">
+   <div class="auth-brand">${UI.mark(true)}<span class="wordmark">PhishVerse</span><p>Security training you play. Learn to spot ${UI.renderAddr('novac0rp.com',{flag:true})} before it costs you.</p></div>
+   <section class="panel auth-card" aria-labelledby="authTitle">
+    <div class="segmented segmented--block" id="authSeg" role="group" aria-label="Choose"><button type="button" data-am="login" aria-pressed="${!reg}">Sign in</button><button type="button" data-am="register" aria-pressed="${reg}">Create account</button></div>
+    <div><h2 id="authTitle">${reg?"Join your team's training":'Sign in to PhishVerse'}</h2><p class="lead">${reg?'Create an employee account. Your manager will see you on the team dashboard.':'Managers and employees sign in here.'}</p></div>
+    <form id="authForm" novalidate data-keep>
+     ${reg?field('aName','Full name','<input class="input" id="aName" maxlength="60" autocomplete="name" required aria-describedby="aNameErr">')+field('aDept','Team or department','<input class="input" id="aDept" maxlength="40" autocomplete="organization-title" aria-describedby="aDeptHint">',{hint:'For example Finance or Sales.',optional:true}):''}
+     ${field('aEmail','Email','<input class="input" id="aEmail" type="email" inputmode="email" maxlength="120" autocomplete="email" autocapitalize="off" spellcheck="false" required aria-describedby="aEmailErr">')}
+     ${field('aPw','Password',`<input class="input" id="aPw" type="password" minlength="8" autocomplete="${reg?'new-password':'current-password'}" required aria-describedby="${reg?'aPwHint ':''}aPwErr">`,{hint:reg?'At least 8 characters.':''})}
+     <div class="form-error" id="authNote" role="alert"></div>
+     <button class="button button--primary button--block" type="submit" id="authBtn">${reg?'Create account':'Sign in'}</button>
+    </form>
+   </section>
+   <p class="auth-foot">Managers sign in with the account set up for them. Employees create their own.</p>
+  </div></div>`}
+function setFieldError(id,msg){const inp=$(id),e=$(id+'Err');if(!inp||!e)return false;inp.setAttribute('aria-invalid',msg?'true':'false');e.innerHTML=msg?icon('alert')+`<span>${esc(msg)}</span>`:'';return true}
+function bindAuth(keep){
+  if(keep){if($('aEmail'))$('aEmail').value=keep.email||'';if($('aName'))$('aName').value=keep.name||'';if($('aDept'))$('aDept').value=keep.dept||''}
+  $('authSeg').addEventListener('click',e=>{const b=e.target.closest('[data-am]');if(!b||b.dataset.am===authMode)return;authMode=b.dataset.am;renderPortal();const f=$(authMode==='register'?'aName':'aEmail');f&&f.focus()});
+  $('authForm').addEventListener('input',e=>{if(e.target.getAttribute('aria-invalid')==='true')setFieldError(e.target.id,'')});
+  $('authForm').addEventListener('submit',async e=>{e.preventDefault();const note=$('authNote'),btn=$('authBtn');note.innerHTML='';['aName','aEmail','aPw'].forEach(id=>setFieldError(id,''));
+    btn.setAttribute('aria-busy','true');btn.disabled=true;
+    const body={email:$('aEmail').value.trim(),password:$('aPw').value};if(authMode==='register'){body.name=$('aName').value.trim();body.dept=$('aDept').value.trim()}
+    try{setLocalMe(await API(authMode,{method:'POST',body:JSON.stringify(body)}));await loadLocalState();renderPortal()}
+    catch(err){btn.removeAttribute('aria-busy');btn.disabled=false;const m=err.message||'Something went wrong. Check your connection and try again.';
+      const target=/your name/i.test(m)?'aName':err.status===409||/valid email/i.test(m)?'aEmail':/at least 8/i.test(m)?'aPw':null;
+      if(target&&setFieldError(target,m))$(target).focus();else{note.innerHTML=icon('alert')+`<span>${esc(m)}</span>`}}});
+}
+
+/* =========================================================
+   MANAGER PAGES
+   ========================================================= */
 function memberRows(){
   const ids=Object.keys(Store.members).sort((a,b)=>(Store.members[a].name||'').localeCompare(Store.members[b].name||''));
   return ids.map(id=>{const m=Store.members[id],a=assignFor(id,m,Store.assignments[id]),pr=Store.progress[id],st=statusOf(a,pr);return{id,m,a,pr,st}});
 }
-function teamView(){
-  const rows=memberRows();let tot=0,dn=0,sc=[],att=0;
-  rows.forEach(r=>{if(!r.a)return;tot+=r.a.levels.length;r.a.levels.forEach(l=>{if(lvDone(r.pr,l)){dn++;sc.push(r.pr.levels[l].best)}});const comp=r.pr&&Object.values(r.pr.levels||{}).some(L=>Object.values(L.outcomes||{}).includes('compromise'));if(r.st.k==='late'||comp)att++});
-  const pct=tot?Math.round(dn/tot*100):0,avg=sc.length?Math.round(sc.reduce((a,b)=>a+b,0)/sc.length):0;
-  const shareHint=Store.mode==='local'?`<div class="banner"><span>👥</span><div><b>Add your team:</b> employees open <b>${esc(location.origin)}</b> and choose <b>Create account</b>. They appear here straight away. (To reach this from other computers, start the server with <code>--host 0.0.0.0</code>.)</div></div>`:Store.mode==='live'?`<div class="banner"><span>👥</span><div><b>Add your team:</b> use <b>Share</b> on this page and add employees as <b>Contributors</b>. When they open it, they join the team and show up here. Viewers can play but their results can't be saved.</div></div>`:'';
-  const list=rows.length?`<div class="mrow head"><span>Employee</span><span class="hc">Modules</span><span>Status</span><span></span></div>`+rows.map(r=>{
-      const chips=r.a?r.a.levels.map(l=>{const L=r.pr&&r.pr.levels&&r.pr.levels[l],lv=levelById(l);if(!lv)return'';const bad=L&&Object.values(L.outcomes||{}).includes('compromise');return`<span class="mchip ${L&&L.done?(bad?'bad':'done'):''}" title="${esc(lv.title)}">L${lv.n}${L&&L.done?' · '+L.best+'%':''}</span>`}).join(''):'<span class="state">No modules yet</span>';
-      return`<div class="mrow"><div class="person"><img alt="" src="${avatarFor(r.id,r.m.name)}"><div style="min-width:0"><b>${esc(r.m.name||'Someone')}${r.id===Store.me.id?' (you)':''}</b><small>${esc(r.m.dept||'')}${r.pr&&r.pr.lastActive?' · active '+ago(r.pr.lastActive):''}</small></div></div><div class="chips">${chips}</div>
-        <div class="state ${r.st.k}">${r.st.t}${r.a?`<small>${r.a.source==='default'?'Auto plan · ':''}${r.st.done||0}/${r.a.levels.length}${r.a.due?' · due '+fmtDate(r.a.due):''}</small>`:''}</div>
-        ${Store.assignments[r.id]?`<button class="icon-btn" type="button" data-unassign="${esc(r.id)}" aria-label="Remove assignment" title="Remove assignment">✕</button>`:'<span></span>'}</div>`}).join('')
-    :`<div class="empty"><b>No one has joined yet</b>${Store.mode==='live'?'Share this page with your team as Contributors. They appear here as soon as they open it.':'Sample employees will appear here.'}</div>`;
-  /* most missed */
-  const agg={};Object.values(Store.progress).forEach(pr=>Object.entries(pr.levels||{}).forEach(([lid,L])=>Object.entries(L.outcomes||{}).forEach(([tid,o])=>{const k=lid+'/'+tid;agg[k]=agg[k]||{n:0,bad:0};agg[k].n++;if(o==='compromise'||o==='false_alarm')agg[k].bad++})));
-  const miss=Object.entries(agg).filter(([,v])=>v.bad).sort((a,b)=>b[1].bad/b[1].n-a[1].bad/a[1].n||b[1].bad-a[1].bad).slice(0,5).map(([k,v])=>{const[lid,tid]=k.split('/'),lv=levelById(lid),t=lv&&lv.tasks.find(x=>x.id===tid);if(!t)return'';const p=Math.round(v.bad/v.n*100);return`<div class="row"><div style="min-width:0">${esc(t.label)}<small>Level ${lv.n} · ${esc(lv.topic)}</small></div><div class="bar"><i style="width:${p}%"></i></div><em>${p}%</em></div>`}).join('');
-  const sel=draft.sel,due=draft.due||addDaysISO(Date.now(),14);
-  const cfgL=draft.defLevels||new Set(Store.config.defaultLevels||[]),cfgD=draft.defDays||Store.config.defaultDueDays||14;
-  return`<h1 class="pg">Team training</h1><p class="lead">Assign PhishVerse modules, set due dates, and see how each person handles real-world attacks.</p>${shareHint}
-  <div class="kpis"><div class="kpi"><small>Team members</small><b>${rows.length}</b><span>${rows.filter(r=>r.a).length} with training assigned</span></div><div class="kpi"><small>Completion</small><b>${pct}%</b><span>${dn} of ${tot} assigned modules</span></div><div class="kpi"><small>Average score</small><b>${sc.length?avg+'%':'–'}</b><span>Best attempt per module</span></div><div class="kpi ${att?'warn':''}"><small>Needs attention</small><b>${att}</b><span>Overdue or had a compromise</span></div></div>
-  <div class="grid2"><div class="stack"><section class="card"><h2>Team progress</h2><p class="sub">Scores are each person's best attempt. Red chips include at least one compromised decision.</p>${list}</section>
-    <section class="card"><h2>Most missed scenarios</h2><p class="sub">Share of attempts that ended in a compromise or a false alarm.</p>${miss?`<div class="missed">${miss}</div>`:'<div class="empty" style="padding:14px"><b>Nothing missed yet</b>Results appear as people finish modules.</div>'}</section></div>
-   <div class="stack"><section class="card" data-keep><h2>Assign training</h2><p class="sub">Choose people and modules. Re-assigning replaces their current plan.</p>
-     <label class="f">People</label><div class="picks">${rows.length?rows.map(r=>`<label class="pick"><input type="checkbox" data-sel="${esc(r.id)}" ${sel.has(r.id)?'checked':''}><span style="min-width:0">${esc(r.m.name||'Someone')}<small>${esc(r.m.dept||'')}</small></span></label>`).join(''):'<div class="note" style="margin:0">Nobody to assign yet.</div>'}</div>
-     <label class="f">Modules</label><div class="picks">${LEVELS.map(l=>`<label class="pick"><input type="checkbox" data-lv="${l.id}" ${draft.levels.has(l.id)?'checked':''}><span>L${l.n} · ${esc(l.title)}<small>${esc(l.topic)} · ${l.minutes} min</small></span></label>`).join('')}</div>
-     <label class="f" for="dueIn">Due date</label><input class="inp" type="date" id="dueIn" value="${due}" min="${todayISO()}">
-     <label class="f" for="noteIn">Note to employees (optional)</label><textarea class="inp" id="noteIn" maxlength="240" placeholder="e.g. Please finish before the quarterly review.">${esc(draft.note)}</textarea>
-     <button class="btn wide" type="button" id="assignBtn" ${sel.size&&draft.levels.size?'':'disabled'}>Assign to ${sel.size||0} ${sel.size===1?'person':'people'}</button><div class="note" id="assignNote">${esc(draft.msgA)}</div></section>
-    <section class="card" data-keep><h2>Auto-assign new joiners</h2><p class="sub">Anyone who joins without a plan gets these modules.</p>
-     <div class="picks">${LEVELS.map(l=>`<label class="pick"><input type="checkbox" data-def="${l.id}" ${cfgL.has(l.id)?'checked':''}><span>L${l.n} · ${esc(l.title)}</span></label>`).join('')}</div>
-     <label class="f" for="defDays">Due after</label><select class="inp" id="defDays">${[7,14,21,30].map(d=>`<option value="${d}" ${+cfgD===d?'selected':''}>${d} days</option>`).join('')}</select>
-     <button class="btn ghost wide" type="button" id="saveDef">Save default plan</button><div class="note" id="defNote">${esc(draft.msgD)}</div></section></div></div>`;
+const hasCompromise=L=>!!L&&Object.values(L.outcomes||{}).includes('compromise');
+function scoreChip(lid,pr){const L=pr&&pr.levels&&pr.levels[lid],lv=levelById(lid);if(!lv)return'';const done=L&&L.done,bad=done&&hasCompromise(L);
+  const sr=done?`Level ${lv.n}, best ${L.best}%${bad?', includes a compromised decision':''}`:`Level ${lv.n}, not finished`;
+  return`<span class="score-chip"${done?` data-state="${bad?'bad':'done'}"`:''} title="${esc(lv.title)}" aria-label="${esc(sr)}">${icon(done?(bad?'alert':'check'):'circle')}L${lv.n}${done?' · '+L.best+'%':''}</span>`}
+function personCell(r){return`<div class="person">${avatarFor(r.id,r.m.name)}<div><b>${esc(r.m.name||'Someone')}${r.id===Store.me.id?' (you)':''}</b><small>${esc(r.m.dept||'No team')}${r.pr&&r.pr.lastActive?' · active '+ago(r.pr.lastActive):''}</small></div></div>`}
+function peopleTable(rows,{details}={}){
+  if(!rows.length)return emptyState('users','No one has joined yet',Store.mode==='live'?'Share this page with your team as Contributors. They appear here as soon as they open it.':Store.mode==='local'?'Employees appear here as soon as they create an account.':'Sample employees will appear here.',
+    Store.mode==='local'?`<button type="button" class="button button--secondary" data-copy-link>${icon('mail','icon--sm')}Copy sign-up link</button>`:'',true);
+  return`<div class="table-scroll"><table class="table table--stack people-table"><thead><tr><th scope="col">Person</th><th scope="col">Modules</th><th scope="col">Status</th><th scope="col"><span class="sr-only">Actions</span></th></tr></thead>
+   <tbody data-stagger>${rows.map(r=>{
+     const chips=r.a?r.a.levels.map(l=>scoreChip(l,r.pr)).join(''):'<span class="muted" style="font-size:var(--t-xs)">No modules yet</span>';
+     const meta=r.a?`${r.a.source==='default'?'Auto plan · ':''}<span class="num">${r.st.done||0}/${r.a.levels.length}</span>${r.a.due?' · due '+fmtDate(r.a.due):''}`:'';
+     const act=details?`<button type="button" class="button button--quiet button--icon" data-details="${esc(r.id)}" aria-label="Details for ${esc(r.m.name||'this person')}" title="Details">${icon('chevron')}</button>`
+       :Store.assignments[r.id]?`<button type="button" class="button button--quiet button--icon" data-unassign="${esc(r.id)}" aria-label="Remove ${esc(r.m.name||'this person')}'s assignment" title="Remove assignment">${icon('close')}</button>`:'';
+     return`<tr data-person="${esc(r.id)}" data-name="${esc((r.m.name+' '+(r.m.dept||'')).toLowerCase())}"${details?' data-href':''}><td data-col="person">${personCell(r)}</td><td data-col="modules"><div class="chips">${chips}</div></td><td data-col="status"><div class="status-cell">${statusPill(r.st)}${meta?`<small>${meta}</small>`:''}</div></td><td class="cell-actions">${act}</td></tr>`}).join('')}</tbody></table></div>`;
 }
+function teamStats(rows){let tot=0,dn=0,sc=[],att=0;
+  rows.forEach(r=>{if(!r.a)return;tot+=r.a.levels.length;r.a.levels.forEach(l=>{if(lvDone(r.pr,l)){dn++;sc.push(r.pr.levels[l].best)}});const comp=r.pr&&Object.values(r.pr.levels||{}).some(hasCompromise);if(r.st.k==='late'||comp)att++});
+  return{tot,dn,att,n:sc.length,pct:tot?Math.round(dn/tot*100):0,avg:sc.length?Math.round(sc.reduce((a,b)=>a+b,0)/sc.length):0}}
+function overviewPage(){
+  const rows=memberRows(),s=teamStats(rows),withPlan=rows.filter(r=>r.a).length;
+  const hint=Store.mode==='local'?`<div class="banner">${icon('users')}<div><b>Add your team.</b> Employees open ${UI.renderAddr(location.origin)} and choose <b>Create account</b>. They appear here straight away. For phones on your Wi-Fi, start the server with <code>python server.py --lan</code>.</div></div>`
+    :Store.mode==='live'?`<div class="banner">${icon('users')}<div><b>Add your team.</b> Use <b>Share</b> on this page and add employees as <b>Contributors</b>. When they open it, they join the team and show up here. Viewers can play but their results can't be saved.</div></div>`:'';
+  const kpi=(v,l,n,tone,ic)=>`<div class="kpi"${tone?` data-tone="${tone}"`:''}><span class="kpi-value">${v}</span><span class="kpi-label">${ic?icon(ic):''}${l}</span><span class="kpi-note">${n}</span></div>`;
+  return`${hint}
+  <section class="kpi-strip" aria-label="Team summary">${kpi(rows.length,'Team members',`${withPlan} with training assigned`)}${kpi(s.pct+'%','Completion',`${s.dn} of ${s.tot} assigned modules`)}${kpi(s.n?s.avg+'%':'–','Average score','Best attempt per module')}${kpi(s.att,'Need attention','Overdue or had a compromise',s.att?'danger':'',s.att?'alert':'')}</section>
+  <div class="ov-grid"><div class="ov-main">
+    <section class="panel panel--flush" aria-labelledby="tpH"><div class="panel-head"><div><h2 id="tpH">Team progress</h2><p>Scores are each person's best attempt. Red chips include at least one compromised decision.</p></div><a class="button button--quiet button--sm" href="#people">All people${icon('arrow','icon--sm')}</a></div>${peopleTable(rows)}</section>
+    <section class="panel" aria-labelledby="mmH"><div class="panel-head"><div><h2 id="mmH">Most missed scenarios</h2><p>Share of attempts that ended in a compromise or a false alarm.</p></div></div>${missedList()}</section>
+  </div><div class="ov-side">${assignPanel(rows)}${defaultPlanPanel()}</div></div>`;
+}
+function missedList(){
+  const agg={};Object.values(Store.progress).forEach(pr=>Object.entries(pr.levels||{}).forEach(([lid,L])=>Object.entries(L.outcomes||{}).forEach(([tid,o])=>{const k=lid+'/'+tid;agg[k]=agg[k]||{n:0,bad:0};agg[k].n++;if(o==='compromise'||o==='false_alarm')agg[k].bad++})));
+  const miss=Object.entries(agg).filter(([,v])=>v.bad).sort((a,b)=>b[1].bad/b[1].n-a[1].bad/a[1].n||b[1].bad-a[1].bad).slice(0,5).map(([k,v])=>{const[lid,tid]=k.split('/'),lv=levelById(lid),t=lv&&lv.tasks.find(x=>x.id===tid);if(!t)return'';const p=Math.round(v.bad/v.n*100);
+    return`<li class="missed-row"><div style="min-width:0"><b>${esc(t.label)}</b><small>Level ${lv.n} · ${esc(lv.topic)}</small></div><div class="progress" data-tone="danger" aria-hidden="true"><i style="--p:${p/100}"></i></div><span class="pct">${p}%</span></li>`}).join('');
+  return miss?`<ol class="missed-list" data-stagger>${miss}</ol>`:emptyState('target','Nothing missed yet','Results appear here as people finish modules.','',true);
+}
+function assignPanel(rows){
+  const sel=draft.sel,due=draft.due||addDaysISO(Date.now(),14),ready=sel.size&&draft.levels.size;
+  return`<section class="panel" data-keep aria-labelledby="asH"><div class="panel-head"><div><h2 id="asH">Assign training</h2><p>Choose people and modules. Re-assigning replaces their current plan.</p></div></div>
+   <form class="form-stack" id="assignForm" novalidate>
+    <div class="field"><span class="field-label" id="lblPeople">People</span>${rows.length?`<div class="option-list option-list--scroll" role="group" aria-labelledby="lblPeople">${rows.map(r=>`<label class="check"><input type="checkbox" data-sel="${esc(r.id)}" ${sel.has(r.id)?'checked':''}><span>${esc(r.m.name||'Someone')}<small>${esc(r.m.dept||'No team')}</small></span></label>`).join('')}</div>`:'<span class="field-hint">Nobody to assign yet.</span>'}</div>
+    <div class="field"><span class="field-label" id="lblMods">Modules</span><div class="option-list" role="group" aria-labelledby="lblMods">${LEVELS.map(l=>`<label class="check"><input type="checkbox" data-lv="${l.id}" ${draft.levels.has(l.id)?'checked':''}><span>L${l.n} · ${esc(l.title)}<small>${esc(l.topic)} · ${l.minutes} min</small></span></label>`).join('')}</div></div>
+    ${field('dueIn','Due date',`<input class="input" type="date" id="dueIn" value="${due}" min="${todayISO()}">`)}
+    ${field('noteIn','Note to employees',`<textarea class="input" id="noteIn" maxlength="240" placeholder="For example: please finish before the quarterly review." aria-describedby="noteInHint">${esc(draft.note)}</textarea>`,{optional:true,hint:'Shown on their training page.'})}
+    <div class="form-actions"><button class="button button--primary button--block" type="submit" id="assignBtn" ${ready?'':'disabled'} aria-describedby="assignHint">${assignLabel()}</button><span class="field-hint" id="assignHint"${ready?' hidden':''}>Choose at least one person and one module.</span></div>
+   </form></section>`;
+}
+const assignLabel=()=>{const n=draft.sel.size;return`Assign to ${n} ${n===1?'person':'people'}`};
+function defaultPlanPanel(){
+  const cfgL=draft.defLevels||new Set(Store.config.defaultLevels||[]),cfgD=draft.defDays||Store.config.defaultDueDays||14;
+  return`<section class="panel" data-keep aria-labelledby="dpH"><div class="panel-head"><div><h2 id="dpH">Auto-assign new joiners</h2><p>Anyone who joins without a plan gets these modules.</p></div></div>
+   <div class="form-stack"><div class="option-list" role="group" aria-labelledby="dpH">${LEVELS.map(l=>`<label class="check"><input type="checkbox" data-def="${l.id}" ${cfgL.has(l.id)?'checked':''}><span>L${l.n} · ${esc(l.title)}</span></label>`).join('')}</div>
+   ${field('defDays','Due after',`<select class="select" id="defDays">${[7,14,21,30].map(d=>`<option value="${d}" ${+cfgD===d?'selected':''}>${d} days</option>`).join('')}</select>`)}
+   <button class="button button--secondary button--block" type="button" id="saveDef">Save default plan</button></div></section>`;
+}
+function peoplePage(){
+  const rows=memberRows();
+  return`<div class="page-head"><p>Everyone on the team, their plan and their best scores. Open a person to see each decision.</p>
+   <div class="search"><label class="sr-only" for="peopleSearch">Search people</label>${icon('search')}<input class="input" id="peopleSearch" type="search" placeholder="Search by name or team" value="${esc(draft.search)}" autocomplete="off"></div></div>
+   <section class="panel panel--flush" aria-label="People">${peopleTable(rows,{details:true})}<div id="noMatch" hidden>${emptyState('search','No one matches that search','Try a first name or a team such as Finance.','',true)}</div></section>`;
+}
+function personDrawer(id){
+  const m=Store.members[id];if(!m)return;const a=assignFor(id,m,Store.assignments[id]),pr=Store.progress[id],st=statusOf(a,pr);
+  const ids=[...new Set([...(a?a.levels:[]),...Object.keys((pr&&pr.levels)||{})])].filter(levelById);
+  const results=ids.map(lid=>{const lv=levelById(lid),L=pr&&pr.levels&&pr.levels[lid];
+    const outs=L&&L.done?scoredTasks(lv).map(t=>{const o=L.outcomes&&L.outcomes[t.id];if(!o||!OUT[o])return'';const[tone,ic]=OUT_UI[o];return`<li><span data-tone="${tone}">${icon(ic)}</span><span>${esc(t.label)}</span><span class="muted" style="margin-left:auto">${OUT[o].label}</span></li>`}).join(''):'';
+    return`<article class="result-item"><header><h3>Level ${lv.n} · ${esc(lv.title)}</h3>${scoreChip(lid,pr)}</header>${L&&L.done?`<p class="muted" style="font-size:var(--t-xs)">${L.attempts} ${plural(L.attempts,'attempt')} · last ${L.last}%${L.completedAt?' · '+fmtDay(L.completedAt):''}</p><ul class="outcome-list">${outs}</ul>`:'<p class="muted" style="font-size:var(--t-xs)">Not finished yet.</p>'}</article>`}).join('');
+  const body=`<div class="drawer-person">${avatarFor(id,m.name,'lg')}<div><h3>${esc(m.name||'Someone')}</h3><p>${esc(m.dept||'No team')}${m.joinedAt?' · joined '+fmtDay(m.joinedAt):''}</p></div></div>
+   <div class="drawer-section"><span class="label">Plan</span><dl class="dl"><dt>Status</dt><dd>${statusPill(st)}</dd>${a?`<dt>Source</dt><dd>${a.source==='default'?'Auto plan for new joiners':'Assigned by a manager'}</dd><dt>Modules</dt><dd>${a.levels.map(l=>'L'+levelById(l).n).join(', ')}</dd>${a.due?`<dt>Due</dt><dd>${fmtDay(new Date(a.due+'T12:00:00').getTime())}</dd>`:''}`:''}<dt>Last active</dt><dd>${pr&&pr.lastActive?ago(pr.lastActive):'never'}</dd></dl>${a&&a.note?`<div class="quote"><small>Note</small>${esc(a.note)}</div>`:''}</div>
+   <div class="drawer-section"><span class="label">Results</span>${results?`<div class="result-list">${results}</div>`:'<p class="muted">No modules yet.</p>'}</div>`;
+  const foot=Store.assignments[id]?`<button type="button" class="button button--danger" data-unassign="${esc(id)}">${icon('trash','icon--sm')}Remove assignment</button>`:'';
+  const d=openDrawer({title:'Person',body,footer:foot||null});
+  const rb=d.el.querySelector('[data-unassign]');rb&&rb.addEventListener('click',async()=>{if(await unassign(id))d.close()});
+}
+async function unassign(id){const m=Store.members[id],name=(m&&m.name)||'this person';
+  const ok=await confirmModal({title:`Remove ${name}'s assignment?`,body:'Their results stay. If a default plan is set, they move to it.',confirm:'Remove assignment',danger:true});
+  if(!ok)return false;const r=await write('assignments/'+id,null);
+  if(r===true){UI.toast('Assignment removed',{description:`${name} no longer has a manager-assigned plan.`});renderPortal();return true}
+  UI.toast('Could not remove the assignment',{type:'error',description:'Check your connection and try again.'});return false}
 function modArt(l){
   const c=mk(260,84),g=c.getContext('2d');const gr=g.createLinearGradient(0,0,260,84);gr.addColorStop(0,'#173524');gr.addColorStop(1,'#0e1a14');g.fillStyle=gr;g.fillRect(0,0,260,84);
   g.fillStyle='rgba(74,222,128,.07)';for(let i=0;i<260;i+=16)g.fillRect(i,0,1,84);for(let j=0;j<84;j+=16)g.fillRect(0,j,260,1);
   const who={orientation:'ada',inbox:'dev',signals:'priya',access:'courier',executive:'hale'}[l.id],spr=sheet(P[who]).down[0];g.imageSmoothingEnabled=false;g.drawImage(spr,60,4,spr.width*2.7,spr.height*2.7);
   const prop={orientation:PROPS.usb[0],inbox:deskFrames('mail','')[0],signals:PROPS.phone[1],access:PROPS.notice[0],executive:PROPS.execDesk[0]}[l.id];g.imageSmoothingEnabled=true;const k=Math.min(90/prop.width,62/prop.height);g.drawImage(prop,150,(84-prop.height*k)/2,prop.width*k,prop.height*k);return c;
 }
-function modulesView(){
-  return`<h1 class="pg">Modules</h1><p class="lead">Five levels, ${LEVELS.reduce((s,l)=>s+scoredTasks(l).length,0)} scenarios. Each scenario asks the player to inspect, then decide. Some requests are genuine, so over-reporting costs points too.</p>
-  <div class="mods">${LEVELS.map(l=>`<article class="mod"><div class="art" data-art="${l.id}"></div><span class="num">LEVEL ${l.n}</span><h3>${esc(l.title)}</h3><p>${esc(l.blurb)}</p><div class="meta"><span class="tag">${esc(l.topic)}</span><span class="tag">${scoredTasks(l).length} scenarios</span><span class="tag">${l.minutes} min</span></div><button class="btn ghost sm" type="button" data-play="${l.id}" style="align-self:flex-start;margin-top:6px">Preview level ▶</button></article>`).join('')}</div>`;
+function programsPage(){
+  return`<section class="panel">${emptyState('programs','Training programs will appear here','A program bundles modules with a due date and a pass mark for the final test. Until then, assign modules from Overview.',`<a class="button button--secondary" href="#overview">Assign modules${icon('arrow','icon--sm')}</a>`,true)}</section>
+  <div class="page-head"><div><h2 style="font-size:var(--t-xl);font-weight:800">Module library</h2><p>Five levels, ${LEVELS.reduce((s,l)=>s+scoredTasks(l).length,0)} scenarios. Each scenario asks the player to inspect, then decide. Some requests are genuine, so over-reporting costs points too.</p></div></div>
+  <div class="module-grid" data-stagger>${LEVELS.map(l=>`<article class="panel module-card"><div class="module-art" data-art="${l.id}"></div><span class="label">Level ${l.n}</span><h3>${esc(l.title)}</h3><p>${esc(l.blurb)}</p><div class="tag-row"><span class="tag">${esc(l.topic)}</span><span class="tag">${scoredTasks(l).length} scenarios</span><span class="tag">${l.minutes} min</span></div><button class="button button--secondary button--sm" type="button" data-play="${l.id}">${icon('play','icon--sm')}Preview level</button></article>`).join('')}</div>`;
 }
-function meView(){
+
+/* =========================================================
+   EMPLOYEE PAGES
+   ========================================================= */
+const starRow=n=>`<span class="star-row" aria-label="${n} of 3 stars">${'★'.repeat(n)}<i>${'★'.repeat(3-n)}</i></span>`;
+function journeyPage(){
   const m=Store.myMember;
   if(Store.mode==='live'&&!m){const nm=draft.joinName||Store.me.name||'';
-    return`<div class="card joinc" data-keep><h2 style="font:700 24px/1.15 var(--display);margin:0 0 6px">Join your team's training</h2><p class="sub" style="font-size:13.5px">Your manager uses this page to assign security training. Tell them who you are.</p>
-      <label class="f" for="jName">Your name</label><input class="inp" id="jName" maxlength="60" value="${esc(nm)}" placeholder="Full name">
-      <label class="f" for="jDept">Team or department</label><input class="inp" id="jDept" maxlength="40" value="${esc(draft.joinDept)}" placeholder="e.g. Finance">
-      <button class="btn wide" type="button" id="joinBtn">Join training</button><div class="note" id="joinNote">${Store.canWrite===false?'Your access is view-only. Ask your manager to share this page with you as a Contributor so your progress can be saved.':''}</div></div>`}
+    return`<section class="panel" data-keep aria-labelledby="joinH"><div class="form-stack"><div><h1 id="joinH" class="display" style="font-size:var(--t-2xl)">Join your team's training</h1><p class="muted" style="margin-top:4px">Your manager uses this page to assign security training. Tell them who you are.</p></div>
+      ${field('jName','Your name',`<input class="input" id="jName" maxlength="60" value="${esc(nm)}" autocomplete="name">`)}
+      ${field('jDept','Team or department',`<input class="input" id="jDept" maxlength="40" value="${esc(draft.joinDept)}" placeholder="For example Finance">`,{optional:true})}
+      <button class="button button--primary button--block" type="button" id="joinBtn">Join training</button><div class="form-error" id="joinNote" role="alert">${Store.canWrite===false?esc('Your access is view-only. Ask your manager to share this page with you as a Contributor so your progress can be saved.'):''}</div></div></section>`}
   const a=assignFor(Store.me.id,m,Store.myAssign),pr=Store.myProg,first=((m&&m.name)||Store.me.name||'there').split(' ')[0];
-  const lvls=a?a.levels.map(levelById).filter(Boolean):[];const done=lvls.filter(l=>lvDone(pr,l.id)).length,pct=lvls.length?Math.round(done/lvls.length*100):0,C=2*Math.PI*44;
-  const late=a&&a.due&&a.due<todayISO()&&done<lvls.length;
-  const hero=`<section class="hero"><div><h1>Hi ${esc(first)} 👋</h1><p>${a?`${done} of ${lvls.length} modules complete${a.due?` · ${late?'<b style="color:#fca5a5">overdue</b> since':'due'} ${fmtDate(a.due)}`:''}.`:"You don't have any training assigned yet. Try a module for practice below."}</p>${a&&a.note?`<div class="msg"><small>Note from your manager</small>${esc(a.note)}</div>`:''}</div>
-    ${a?`<div class="ring"><svg width="108" height="108" viewBox="0 0 108 108"><circle cx="54" cy="54" r="44" fill="none" stroke="#1b2a22" stroke-width="10"/><circle cx="54" cy="54" r="44" fill="none" stroke="#22c55e" stroke-width="10" stroke-linecap="round" stroke-dasharray="${C}" stroke-dashoffset="${C*(1-pct/100)}"/></svg><b>${pct}%</b><small>complete</small></div>`:''}</section>`;
+  const lvls=a?a.levels.map(levelById).filter(Boolean):[];const done=lvls.filter(l=>lvDone(pr,l.id)).length,pct=lvls.length?Math.round(done/lvls.length*100):0;
+  const late=a&&a.due&&a.due<todayISO()&&done<lvls.length,st=statusOf(a,pr);
+  const greet=`<header class="greet"><div><h1 class="display" id="greetH">Hi ${esc(first)}</h1><p>${a?(done===lvls.length?'You finished everything assigned. Replay a module any time to beat your score.':late?'Your training is overdue. Pick up where you left off below.':'Your next step is marked below.'):"You don't have any training assigned yet."}</p></div></header>`;
+  const C=2*Math.PI*42;
+  const program=a?`<section class="panel program" aria-labelledby="progH"><div><span class="label">${a.source==='default'?'Your starter plan':'Your training'}</span><h2 id="progH" style="margin-top:4px">${done} of ${lvls.length} ${plural(lvls.length,'module')} complete</h2>
+      <div class="program-meta">${statusPill(st)}${a.due?`<span>${late?'Was due':'Due'} ${fmtDate(a.due)}</span>`:''}</div></div>
+      <div class="ring" role="img" aria-label="${pct}% complete"><svg viewBox="0 0 100 100"><circle class="ring-track" cx="50" cy="50" r="42"/><circle class="ring-fill" cx="50" cy="50" r="42" stroke-dasharray="${C}" stroke-dashoffset="${C*(1-pct/100)}"${pct?'':' stroke-opacity="0"'}/></svg><b>${pct}%</b></div>
+      ${a.note?`<div class="quote"><small>Note from your manager</small>${esc(a.note)}</div>`:''}</section>`
+    :`<section class="panel">${emptyState('journey','No training assigned yet',"When your manager assigns modules, they appear here in order. Until then, try one for practice.",`<button type="button" class="button button--secondary" data-play="orientation">${icon('play','icon--sm')}Try Level 1</button>`,true)}</section>`;
   let curFound=false;
-  const trail=a?`<section class="card" style="padding:14px 10px"><h2 style="padding:0 8px">Your training path</h2><p class="sub" style="padding:0 8px">Modules unlock in order. Replay any finished module to improve your score.</p><div class="trail">${lvls.map((l,i)=>{const L=pr&&pr.levels&&pr.levels[l.id],isD=L&&L.done,cur=!isD&&!curFound;if(cur)curFound=true;const lock=!isD&&!cur;
-      return`<div class="step ${isD?'done':cur?'cur':''}"><div class="node">${isD?'✓':lock?'🔒':l.n}</div><div class="body"><h3>Level ${l.n} · ${esc(l.title)}</h3><p>${isD?`<span class="stars">${starStr(L.stars||1)}</span> Best ${L.best}% · ${L.attempts} attempt${L.attempts>1?'s':''}`:lock?`Unlocks after Level ${lvls[i-1].n}`:`${esc(l.topic)} · ${scoredTasks(l).length} scenarios · about ${l.minutes} min`}</p></div>
-        ${isD?`<button class="btn ghost sm" type="button" data-play="${l.id}">Replay</button>`:cur?`<button class="btn sm" type="button" data-play="${l.id}">${L?'Resume':'Start'} ▶</button>`:'<span></span>'}</div>`}).join('')}</div></section>`:'';
-  const badges=`<section class="card"><h2>Badges</h2><p class="sub">Earn one for each module you finish.</p><div class="badges">${LEVELS.map(l=>`<span class="bdg ${lvDone(pr,l.id)?'':'off'}"><i>${lvDone(pr,l.id)?'★':'·'}</i>${BADGE[l.id]}</span>`).join('')}</div></section>`;
-  const practice=`<section class="card"><h2>${a?'Practice any module':'Practice modules'}</h2><p class="sub">${a?'Practice runs are recorded too, so your manager sees your best score.':'Results are saved to your record.'}</p><div class="mods" style="grid-template-columns:repeat(auto-fill,minmax(200px,1fr))">${LEVELS.map(l=>`<button class="pick" type="button" data-play="${l.id}" style="justify-content:space-between;text-align:left"><span>L${l.n} · ${esc(l.title)}<small>${esc(l.topic)}${lvDone(pr,l.id)?' · best '+pr.levels[l.id].best+'%':''}</small></span><span style="color:var(--green-hi);font-weight:800">▶</span></button>`).join('')}</div></section>`;
-  return hero+`<div class="stack">${trail}${badges}${practice}</div>`;
+  const steps=lvls.map((l,i)=>{const L=pr&&pr.levels&&pr.levels[l.id],isD=L&&L.done,cur=!isD&&!curFound;if(cur)curFound=true;const state=isD?'done':cur?'next':'locked';
+    const node=isD?icon('check'):cur?'<span class="next-marker" aria-hidden="true"></span>':icon('lock','icon--sm');
+    const meta=isD?`${starRow(L.stars||1)}Best <span class="num">${L.best}%</span> · ${L.attempts} ${plural(L.attempts,'attempt')}`:cur?`${esc(l.topic)} · ${scoredTasks(l).length} scenarios · about ${l.minutes} min`:`Unlocks after Level ${lvls[i-1].n}`;
+    const action=isD?`<button class="button button--secondary button--sm" type="button" data-play="${l.id}" aria-label="Replay Level ${l.n}">Replay</button>`:cur?`<button class="button button--primary" type="button" data-play="${l.id}">${L?'Resume':'Start'}${icon('play','icon--sm')}</button>`:'<span></span>';
+    return`<li class="j-step" data-state="${state}"><span class="j-node">${node}</span><div class="j-body"><h3>${cur?'<span class="sr-only">Next step: </span>':''}Level ${l.n} · ${esc(l.title)}</h3><p>${meta}</p></div>${action}</li>`}).join('');
+  const journey=a?`<section class="panel" aria-labelledby="jH"><div class="panel-head"><div><h2 id="jH">Your journey</h2><p>Modules unlock in order. Replay any finished module to improve your score.</p></div></div><ol class="journey" data-stagger>${steps}</ol></section>`:'';
+  const badges=`<section class="panel" aria-labelledby="bH"><div class="panel-head"><div><h2 id="bH">Badges</h2><p>Earn one for each module you finish.</p></div></div><ul class="badge-row">${LEVELS.map(l=>{const e=lvDone(pr,l.id);return`<li class="badge" data-earned="${e}"><i>${icon(e?'check':'lock')}</i>${BADGE[l.id]}<span class="sr-only">${e?' (earned)':' (not earned yet)'}</span></li>`}).join('')}</ul></section>`;
+  const practice=`<section class="panel" aria-labelledby="pH"><div class="panel-head"><div><h2 id="pH">${a?'Practice any module':'Practice modules'}</h2><p>${a?'Practice runs are recorded too, so your manager sees your best score.':'Results are saved to your record.'}</p></div></div><div class="practice-grid">${LEVELS.map(l=>`<button class="practice-item" type="button" data-play="${l.id}"><span><b>L${l.n} · ${esc(l.title)}</b><small>${esc(l.topic)}${lvDone(pr,l.id)?' · best '+pr.levels[l.id].best+'%':''}</small></span>${icon('play')}</button>`).join('')}</div></section>`;
+  return greet+program+journey+badges+practice;
 }
-function bindView(){
-  view.querySelectorAll('[data-tab]').forEach(b=>b.addEventListener('click',()=>{tab=b.dataset.tab;renderPortal()}));
+function profilePage(){
+  const m=Store.myMember||{},name=m.name||Store.me.name||'You';
+  return`<section class="panel profile-card" aria-labelledby="prH"><div class="profile-head">${avatarFor(Store.me.id,name,'lg')}<div><h2 id="prH">${esc(name)}</h2><p>${esc(m.dept||Store.me.dept||'No team')} · ${roleName()}</p></div></div>
+   <dl class="dl">${Store.me.email?`<dt>Email</dt><dd>${UI.renderAddr(Store.me.email)}</dd>`:''}${m.joinedAt?`<dt>Joined</dt><dd>${fmtDay(m.joinedAt)}</dd>`:''}</dl></section>
+   <section class="panel" aria-labelledby="stH"><div class="panel-head"><div><h2 id="stH">This device</h2><p>Settings here apply only to this browser.</p></div></div>
+    <div class="form-stack"><div class="setting-row"><div><b>Theme</b><small>System follows your phone or computer.</small></div>${UI.themeSwitch()}</div>
+    ${Store.mode==='local'?`<div class="setting-row"><div><b>Sign out</b><small>You can sign back in with your email and password.</small></div><button type="button" class="button button--secondary" data-signout>${icon('logout','icon--sm')}Sign out</button></div>`:''}</div></section>`;
+}
+
+/* =========================================================
+   VIEW EVENTS
+   ========================================================= */
+function bindView(view,page){
   view.querySelectorAll('[data-play]').forEach(b=>b.addEventListener('click',()=>{audioInit();startLevel(b.dataset.play,{graded:true})}));
   view.querySelectorAll('[data-art]').forEach(el=>el.append(modArt(levelById(el.dataset.art))));
+  view.querySelectorAll('[data-signout]').forEach(b=>b.addEventListener('click',logoutLocal));
   view.querySelectorAll('[data-sel]').forEach(c=>c.addEventListener('change',()=>{c.checked?draft.sel.add(c.dataset.sel):draft.sel.delete(c.dataset.sel);updAssignBtn()}));
   view.querySelectorAll('[data-lv]').forEach(c=>c.addEventListener('change',()=>{c.checked?draft.levels.add(c.dataset.lv):draft.levels.delete(c.dataset.lv);updAssignBtn()}));
   view.querySelectorAll('[data-def]').forEach(c=>c.addEventListener('change',()=>{draft.defLevels=draft.defLevels||new Set(Store.config.defaultLevels||[]);c.checked?draft.defLevels.add(c.dataset.def):draft.defLevels.delete(c.dataset.def)}));
+  view.querySelectorAll('[data-unassign]').forEach(b=>b.addEventListener('click',async e=>{e.stopPropagation();b.disabled=true;await unassign(b.dataset.unassign);b.disabled=false}));
+  view.querySelectorAll('[data-details]').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();personDrawer(b.dataset.details)}));
+  view.querySelectorAll('tr[data-href]').forEach(tr=>tr.addEventListener('click',e=>{if(e.target.closest('button,a,input'))return;personDrawer(tr.dataset.person)}));
+  view.querySelectorAll('[data-copy-link]').forEach(b=>b.addEventListener('click',async()=>{try{await navigator.clipboard.writeText(location.origin);UI.toast('Link copied',{description:location.origin})}catch(e){UI.toast('Copy this link',{type:'info',description:location.origin})}}));
   const due=$('dueIn');due&&due.addEventListener('change',()=>{draft.due=due.value});
   const note=$('noteIn');note&&note.addEventListener('input',()=>{draft.note=note.value});
   const dd=$('defDays');dd&&dd.addEventListener('change',()=>{draft.defDays=+dd.value});
-  const ab=$('assignBtn');ab&&ab.addEventListener('click',async()=>{ab.disabled=true;const ids=[...draft.sel],lv=LEVELS.map(l=>l.id).filter(id=>draft.levels.has(id)),dueV=draft.due||addDaysISO(Date.now(),14);let ok=0,fail=0;
+  const af=$('assignForm');af&&af.addEventListener('submit',async e=>{e.preventDefault();const ab=$('assignBtn');if(ab.disabled)return;ab.disabled=true;ab.setAttribute('aria-busy','true');
+    const ids=[...draft.sel],lv=LEVELS.map(l=>l.id).filter(id=>draft.levels.has(id)),dueV=draft.due||addDaysISO(Date.now(),14);let ok=0,fail=0;
     for(const id of ids){const r=await write('assignments/'+id,{levels:lv,due:dueV,note:draft.note.trim(),assignedAt:Date.now(),by:Store.me.id});r===true?ok++:fail++}
-    draft.sel.clear();draft.msgA=fail?`Assigned to ${ok}. ${fail} could not be saved; check that you are an editor of this page.`:`Assigned to ${ok} ${ok===1?'person':'people'}.`;renderPortal();setTimeout(()=>{draft.msgA=''},6000)});
-  const sd=$('saveDef');sd&&sd.addEventListener('click',async()=>{const lv=LEVELS.map(l=>l.id).filter(id=>(draft.defLevels||new Set(Store.config.defaultLevels)).has(id));const r=await write('config/team',{defaultLevels:lv,defaultDueDays:draft.defDays||Store.config.defaultDueDays||14});draft.defLevels=null;draft.defDays=null;if(Store.mode==='live'&&r===true)Store.config={defaultLevels:lv,defaultDueDays:draft.defDays||Store.config.defaultDueDays||14};draft.msgD=r===true?'Default plan saved.':'Could not save the default plan.';renderPortal();setTimeout(()=>{draft.msgD=''},6000)});
-  view.querySelectorAll('[data-unassign]').forEach(b=>b.addEventListener('click',async()=>{b.disabled=true;await write('assignments/'+b.dataset.unassign,null);renderPortal()}));
+    draft.sel.clear();
+    if(fail)UI.toast(`Assigned to ${ok}. ${fail} could not be saved.`,{type:'error',description:'Check that you are a manager or an editor of this page, then try again.'});
+    else UI.toast(`Assigned to ${ok} ${ok===1?'person':'people'}`,{description:`${lv.length} ${plural(lv.length,'module')}, due ${fmtDate(dueV)}.`});
+    renderPortal()});
+  const sd=$('saveDef');sd&&sd.addEventListener('click',async()=>{sd.setAttribute('aria-busy','true');const lv=LEVELS.map(l=>l.id).filter(id=>(draft.defLevels||new Set(Store.config.defaultLevels)).has(id));const days=draft.defDays||Store.config.defaultDueDays||14;
+    const r=await write('config/team',{defaultLevels:lv,defaultDueDays:days});draft.defLevels=null;draft.defDays=null;if(Store.mode==='live'&&r===true)Store.config={defaultLevels:lv,defaultDueDays:days};
+    if(r===true)UI.toast('Default plan saved',{description:lv.length?`New joiners get ${lv.length} ${plural(lv.length,'module')}, due after ${days} days.`:'New joiners get no modules until you assign some.'});else UI.toast('Could not save the default plan',{type:'error',description:'Check your connection and try again.'});
+    renderPortal()});
+  const ps=$('peopleSearch');if(ps){const apply=()=>{const q=ps.value.trim().toLowerCase();draft.search=ps.value;let n=0;view.querySelectorAll('tr[data-person]').forEach(tr=>{const hit=!q||tr.dataset.name.includes(q);tr.hidden=!hit;if(hit)n++});const nm=$('noMatch');if(nm)nm.hidden=n>0||!q};ps.addEventListener('input',apply);apply()}
   const jn=$('jName'),jd=$('jDept');jn&&jn.addEventListener('input',()=>{draft.joinName=jn.value});jd&&jd.addEventListener('input',()=>{draft.joinDept=jd.value});
-  const jb=$('joinBtn');jb&&jb.addEventListener('click',async()=>{const name=(jn.value||'').trim();if(!name){$('joinNote').textContent='Please enter your name.';jn.focus();return}jb.disabled=true;
-    const r=await write('members/'+Store.me.id,{name,dept:(jd.value||'').trim(),joinedAt:Date.now()});if(r===true){Store.myMember={name,dept:(jd.value||'').trim(),joinedAt:Date.now()};renderPortal()}else{jb.disabled=false;$('joinNote').textContent=r==='invalid_argument'?'Your access is view-only. Ask your manager to share this page with you as a Contributor.':'Could not join right now. Please try again.'}});
+  const jb=$('joinBtn');jb&&jb.addEventListener('click',async()=>{const name=(jn.value||'').trim();if(!name){setFieldError('jName','Please enter your name.');jn.focus();return}jb.disabled=true;jb.setAttribute('aria-busy','true');
+    const r=await write('members/'+Store.me.id,{name,dept:(jd.value||'').trim(),joinedAt:Date.now()});if(r===true){Store.myMember={name,dept:(jd.value||'').trim(),joinedAt:Date.now()};renderPortal()}else{jb.disabled=false;jb.removeAttribute('aria-busy');$('joinNote').textContent=r==='invalid_argument'?'Your access is view-only. Ask your manager to share this page with you as a Contributor.':'Could not join right now. Please try again.'}});
 }
-function updAssignBtn(){const b=$('assignBtn');if(!b)return;const n=draft.sel.size;b.disabled=!(n&&draft.levels.size);b.textContent=`Assign to ${n} ${n===1?'person':'people'}`}
-$('logoutBtn').addEventListener('click',logoutLocal);
-$('demoSeg').addEventListener('click',e=>{const b=e.target.closest('[data-r]');if(!b||Store.mode!=='demo')return;Store.isMgr=b.dataset.r==='mgr';tab=Store.isMgr?'team':'me';renderPortal()});
+function updAssignBtn(){const b=$('assignBtn');if(!b)return;const ready=!!(draft.sel.size&&draft.levels.size);b.disabled=!ready;b.textContent=assignLabel();const h=$('assignHint');if(h)h.hidden=ready}
 
 /* =========================================================
    BOOT

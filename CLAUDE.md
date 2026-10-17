@@ -34,6 +34,7 @@ python server.py --lan                  # binds 0.0.0.0, prints the LAN URL for 
 Other flags: `--host`, `--port`, `--set-manager-password PW`. `PHISHVERSE_DB` env var overrides the DB path.
 - Manager login: `manager@novacorp.local` / `manager123`; seeded employees use `demo1234`.
 - `web/index.html` opened directly (file://) runs **demo mode** with sample data. Keep this working.
+- Style guide: http://localhost:5000/styleguide.html (or open web/styleguide.html directly).
 - Delete `phishverse.db` to reset. `.secret_key` holds the Flask session key (never commit either).
 
 ## Layout
@@ -50,8 +51,16 @@ phishverse/seed.py   ensure_defaults() (first manager + config), seed_demo(), se
 migrations/          NNNN_name.sql, applied in order at startup, tracked in schema_version.
 tests/               pytest. conftest.py: app/client/manager/employee fixtures, make_user, sign_in.
 tests/e2e/           Playwright smoke test (marked e2e): desktop manager + phone employee, file:// demo mode.
-web/index.html       Portal markup + game HUD/dialog/modal markup. No build step.
-web/styles.css       All styles. Tokens on :root. Dark single theme.
+web/index.html       Shell: #portal (rendered by portal.js), #game markup (locked), #ui-layer (toasts/drawers/modals).
+web/styleguide.html  Every component in light and dark (served at /styleguide.html).
+web/css/tokens.css   Design tokens from docs/UI_GUIDE.md: colours (light + dark + derived -text/-soft), type scale,
+                     spacing, radii, --hit (38px desktop, 44px phone/touch), motion easings and durations.
+web/css/base.css     Reset + portal typography, scoped to .ds (element resets use :where(.ds), zero specificity).
+web/css/components.css  Buttons, status pill, chips, avatar, .addr, field, select, checkbox, segmented, tabs, panel,
+                     table, progress/ring/skill, banner, empty state, skeleton, drawer, modal, toast, stagger.
+web/css/portal.css   Sign-in, manager shell (rail -> icons < 1280 -> top menu < 768), employee shell (bottom nav
+                     < 768, 720px column + top nav above), page layouts.
+web/css/game.css     Game styles, all scoped to #game, which carries its own old dark tokens + Inter. Locked.
 web/js/core.js       Map grid + rooms, helpers (H/S sprite painters, outline, hash), characters
                      (charFrame/sheet, 16x24 chibi, 4 dirs x 4 frames + sit), hi-res props (PROPS),
                      static world drawing (drawWorld) at R=2 (32 px per tile).
@@ -60,9 +69,13 @@ web/js/content.js    World objects (placeObjects/addObj/desk), NPC palettes (P) 
 web/js/engine.js     Actors, level state G, rendering + quest highlights, minimap, input/pathfinding,
                      dialog (say), interaction, encounters (openEncounter/showVerdict/openHub),
                      debrief/results, audio, startLevel/stopGame. Hook: onLevelComplete(levelId, summary).
-web/js/portal.js     Store + data modes, portal views (team dashboard, modules, my training, sign-in), boot.
+web/js/ui.js         UI.* helpers (standalone): UI.toast(), openDrawer(), confirmModal(), renderAddr(text,{flag}),
+                     UI.icon(name), UI.avatarHTML(), UI.themeSwitch()/setTheme(). (Plain toast() is the game's.)
+web/js/portal.js     Store + data modes, hash routing, shells, pages, sign-in, boot.
+                     Manager: #overview #people #programs #reports #settings #training. Employee: #journey #skills
+                     #certificates #profile. Shell renders once per role; only #view re-renders on data refresh.
 ```
-Scripts are **classic scripts sharing globals**, loaded in order core → content → engine → portal.
+Scripts are **classic scripts sharing globals**, loaded in order core → content → engine → ui → portal.
 Do not introduce a bundler, framework or npm build unless a task explicitly asks for it.
 
 ## Data modes (portal.js `Store.mode`)
@@ -94,6 +107,13 @@ Score = mean points × 100; stars ≥90 → 3, ≥70 → 2, else 1. Legit scenar
   marker, edge arrow, tracker, minimap dot). Portals follow `docs/UI_GUIDE.md` (tokens, fonts,
   components, motion, layouts). If a UI/design/animation skill is available in the session, use it
   as well; UI_GUIDE.md wins on conflicts.
+- Portal CSS: never reuse a class name the game uses (see game.css: .btn, .chip, .toast, .modal, .pill, .ico,
+  .me, .live-dot ...). Portal names: .button--primary, .status-pill, .score-chip, .icon, etc. `.addr` is shared
+  by name, so the portal one is scoped `:where(.ds) .addr`. State goes in ARIA/data attributes (aria-pressed,
+  aria-current, data-state, data-tone), not bare modifier classes.
+  Gold (--gold, .next-marker, primary buttons) means "next step": at most one .next-marker per screen.
+  Semantic colour always comes with an icon or text; use the -text tokens for coloured text.
+- game.css and the #game markup are the locked game: don't change them unless a task says so.
 - All art and audio are drawn/synthesised in code. Only CC0 assets if any are ever added; log them in ASSETS.md.
 - Copy: plain English, active voice, short sentences, Indian workplace context (₹, Bengaluru office),
   NovaCorp as the fictional company. Never real company brands in phishing examples.
@@ -115,6 +135,10 @@ pytest                 # everything (API tests + Playwright browser smoke test)
 pytest -m "not e2e"    # fast API tests only
 pytest tests/e2e --headed   # watch the browser test
 ```
+`tests/e2e/test_visual.py` screenshots sign-in, manager overview, employee journey, demo mode and the style
+guide at 390×844 and 1440×900 in light and dark into `test-results/screens/` (gitignored) and asserts:
+no horizontal scroll, visible focus on every button/link, touch targets ≥ 44px on phones, no console errors.
+Look at the screenshots after any UI change.
 Tests use a temp DB and a throwaway secret key; they never touch `phishverse.db` or `.secret_key`.
 The e2e test runs the app in a background thread on a free port, stubs Google Fonts, and fails on any
 page error or console error. Test hooks on `window`: `G` (read-only getter for the level state),
@@ -122,5 +146,5 @@ page error or console error. Test hooks on `window`: `G` (read-only getter for t
 `showResults(summary())`. Add a test with every new endpoint or rule (auth, role check, validation).
 
 ## Roadmap
-See `docs/ROADMAP_PROMPTS.md` (stages 0–12, run in order). Stage 0 (foundation) is done. Multi-company (B2B) features from
+See `docs/ROADMAP_PROMPTS.md` (stages 0–12, run in order). Stages 0 (foundation) and 1 (design system) are done. Multi-company (B2B) features from
 PRODUCT_SPEC_v1 are deliberately out of scope until after the demo.

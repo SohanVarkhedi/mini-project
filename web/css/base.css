@@ -1,0 +1,40 @@
+/* Reset and portal typography. Portal styles live under .ds (the #portal root, the #ui-layer
+   overlay root and the style guide) so nothing inherits into the game (#game, see game.css). */
+*,*::before,*::after{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0;min-height:100%}
+body{background:var(--paper)}
+
+.ds{
+  font-family:var(--font-ui);
+  font-size:var(--t-md);
+  line-height:var(--lh-body);
+  color:var(--ink);
+  -webkit-font-smoothing:antialiased;
+  -moz-osx-font-smoothing:grayscale;
+  text-rendering:optimizeLegibility;
+  -webkit-tap-highlight-color:transparent;
+}
+#portal.ds{min-height:100vh;min-height:100dvh;background:var(--paper)}
+:where(.ds) h1,:where(.ds) h2,:where(.ds) h3,:where(.ds) h4,:where(.ds) p,:where(.ds) ul,:where(.ds) ol,:where(.ds) figure,:where(.ds) blockquote{margin:0}
+:where(.ds) ul,:where(.ds) ol{padding:0;list-style:none}
+:where(.ds) button,:where(.ds) input,:where(.ds) select,:where(.ds) textarea{font:inherit;color:inherit}
+:where(.ds) button{cursor:pointer}
+:where(.ds) img,:where(.ds) svg,:where(.ds) canvas{display:block;max-width:100%}
+:where(.ds) a{color:var(--info-text);text-underline-offset:3px;text-decoration-thickness:1px}
+:where(.ds) a:hover{text-decoration-thickness:2px}
+:where(.ds) code,:where(.ds) kbd{font-family:var(--font-mono);font-size:.9em;padding:1px 6px;border-radius:var(--r-sm);background:var(--surface-2);color:var(--ink)}
+:where(.ds) :focus{outline:none}
+.ds :focus-visible{outline:2px solid var(--info);outline-offset:2px}
+.ds ::selection{background:var(--info-soft);color:var(--ink)}
+
+/* text roles */
+.ds .display{font-family:var(--font-display);font-weight:700;line-height:var(--lh-display);letter-spacing:.005em;text-wrap:balance}
+.ds .label{font-size:var(--t-xs);font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-2);line-height:1.3}
+.ds .muted{color:var(--ink-2)}
+.ds .num,.ds .tabular{font-variant-numeric:tabular-nums}
+.ds .measure{max-width:var(--measure)}
+.sr-only{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+
+/* Reduced motion (UI_GUIDE §7) is handled per component: fades stay, movement goes. */
+.ds main[tabindex="-1"]:focus,.ds main[tabindex="-1"]:focus-visible{outline:none}
