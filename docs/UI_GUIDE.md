@@ -60,6 +60,16 @@ game is always dark.
 | `--caution` | `#B86E00` | `#F0A23C` | Acceptable / watch / overdue soon |
 | `--danger` | `#C23B3B` | `#FF6E6E` | Compromise, weak spot, failed, overdue |
 | `--info` | `#2B65D9` | `#73A7FF` | Links, informational states, false alarm |
+| `--safe-text` | `#17724A` | `#3CCB86` | Safe-coloured text and icons on light surfaces |
+| `--caution-text` | `#8A5300` | `#F0A23C` | Caution-coloured text |
+| `--danger-text` | `#A83232` | `#FF6E6E` | Danger-coloured text |
+| `--info-text` | `#2459C2` | `#73A7FF` | Link and info-coloured text |
+| `--safe-soft` · `--caution-soft` · `--danger-soft` · `--info-soft` · `--gold-soft` | `#E2F3EA` · `#FBEFD9` · `#FBE6E6` · `#E3ECFC` · `#FCF0D2` | `#13362A` · `#3A2A12` · `#3D1A22` · `#16294A` · `#3A2C0E` | Tinted backgrounds for pills, banners, selected rows |
+
+Use the base semantic colour (`--safe`, `--caution`, `--danger`, `--info`) for fills, bars, dots and
+borders; use its `-text` variant whenever the colour is text or a small icon, because the light-theme
+base colours of safe and caution fall below 4.5:1 on white. Every `-text` colour is ≥ 4.5:1 on
+`--paper`, `--surface` and its own `-soft` tint in both themes.
 
 Rules: semantic colours always come with an icon or text label (never colour alone). Gold is not a
 generic accent. No gradients on UI surfaces, no glassmorphism in the portals (the game HUD keeps its
