@@ -1,18 +1,26 @@
-"""Training data: state, assignments, config, progress. Plus the app-wide API guards."""
+"""Training data: state, assignments, config. Plus the app-wide API guards.
+
+Level ids come from content/levels.json; progress is written by sessions.py when a level is finished."""
 import json
 import re
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, current_app, jsonify, request
 
 from .auth import err, require_user
 from .db import get_db, now_ms
 
 bp = Blueprint("api", __name__, url_prefix="/api")
 
-LEVEL_IDS = ["orientation", "inbox", "signals", "access", "executive"]
-OUTCOMES = {"safe", "acceptable", "false_alarm", "compromise"}
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
-DEFAULT_CONFIG = {"defaultLevels": ["orientation", "inbox"], "defaultDueDays": 14}
+
+
+def level_ids():
+    return current_app.extensions["pv_content"].level_ids
+
+
+def default_config(content):
+    """New databases auto-assign the first two levels, due in 14 days."""
+    return {"defaultLevels": content.level_ids[:2], "defaultDueDays": 14}
 
 
 @bp.before_app_request
@@ -78,7 +86,7 @@ def put_assignment(uid):
     if not db.execute("SELECT 1 FROM users WHERE id=?", (uid,)).fetchone():
         return err("No such team member.", 404)
     b = request.get_json(silent=True) or {}
-    levels = [l for l in b.get("levels", []) if l in LEVEL_IDS]
+    levels = [l for l in b.get("levels", []) if l in level_ids()]
     if not levels:
         return err("Pick at least one module.")
     due = str(b.get("due", ""))
@@ -108,7 +116,7 @@ def put_config():
     if e:
         return e
     b = request.get_json(silent=True) or {}
-    levels = [l for l in b.get("defaultLevels", []) if l in LEVEL_IDS]
+    levels = [l for l in b.get("defaultLevels", []) if l in level_ids()]
     try:
         days = max(1, min(90, int(b.get("defaultDueDays", 14))))
     except (TypeError, ValueError):
@@ -116,45 +124,5 @@ def put_config():
     data = {"defaultLevels": levels, "defaultDueDays": days}
     db = get_db()
     db.execute("INSERT OR REPLACE INTO config (id,data) VALUES (1,?)", (json.dumps(data),))
-    db.commit()
-    return jsonify(data)
-
-
-def clamp_int(value, lo, hi):
-    """int(value) clamped to [lo, hi]; anything that isn't a number counts as 0."""
-    try:
-        n = int(value or 0)
-    except (TypeError, ValueError, OverflowError):
-        n = 0
-    return max(lo, min(hi, n))
-
-
-def clean_progress(levels_in):
-    """Keep known levels only, clamp numbers, drop unknown outcomes."""
-    clean = {}
-    for lid, L in levels_in.items():
-        if lid not in LEVEL_IDS or not isinstance(L, dict):
-            continue
-        outs = {str(k)[:20]: v for k, v in (L.get("outcomes") or {}).items() if v in OUTCOMES}
-        num = lambda k, lo, hi: clamp_int(L.get(k), lo, hi)
-        clean[lid] = {"best": num("best", 0, 100), "last": num("last", 0, 100), "stars": num("stars", 0, 3),
-                      "done": bool(L.get("done")), "attempts": num("attempts", 0, 10000),
-                      "completedAt": num("completedAt", 0, 10**14), "timeMs": num("timeMs", 0, 10**9),
-                      "outcomes": outs}
-    return clean
-
-
-@bp.put("/progress")
-def put_progress():
-    u, e = require_user()
-    if e:
-        return e
-    b = request.get_json(silent=True) or {}
-    levels_in = b.get("levels") or {}
-    if not isinstance(levels_in, dict):
-        return err("Bad progress data.")
-    data = {"levels": clean_progress(levels_in), "lastActive": now_ms()}
-    db = get_db()
-    db.execute("INSERT OR REPLACE INTO progress (user_id,data) VALUES (?,?)", (u["id"], json.dumps(data)))
     db.commit()
     return jsonify(data)

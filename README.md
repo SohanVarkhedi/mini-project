@@ -20,8 +20,12 @@ phishverse-local/
 │   ├── db.py            # SQLite connection per request + migration runner
 │   ├── auth.py          # sign in, register, sign out, profile
 │   ├── api.py           # state, assignments, config, progress
+│   ├── content.py       # loads and validates content/*.json, scoring
+│   ├── sessions.py      # play sessions and decisions (server-side scoring)
 │   └── seed.py          # default manager + --seed-demo sample data
 ├── migrations/          # 0001_initial.sql, 0002_..., applied in order at startup
+├── content/             # levels.json (scenarios), skills.json, world_refs.json (generated)
+├── scripts/             # build_content.py, validate_content.py, gen_world_refs.py
 ├── tests/               # pytest: API tests + tests/e2e Playwright smoke test
 ├── docs/                # UI_GUIDE.md (design rules), ROADMAP_PROMPTS.md (stages)
 ├── requirements.txt     # runtime dependency (Flask)
@@ -37,7 +41,8 @@ phishverse-local/
     │   └── game.css       # the game's styles (unchanged look)
     └── js/
         ├── core.js      # map, characters, props, office artwork
-        ├── content.js   # levels, scenarios, NPCs, object placement
+        ├── content-data.js # generated from content/*.json (lets demo mode work from a file)
+        ├── content.js   # NPCs and object placement
         ├── engine.js    # movement, rendering, highlights, dialog, encounters, audio
         ├── ui.js        # design-system helpers: toast, drawer, confirm, inspected text, theme
         └── portal.js    # manager/employee portal + data layer
@@ -108,7 +113,8 @@ Or pick the manager login before the first run with environment variables
 3. Back in the manager window, refresh. Under **Assign training**, tick the
    new employee, pick modules and a due date, then click **Assign**.
 4. In the employee window, refresh and click **Start** on Level 1.
-5. Finish the level, talk to Ada, and the score is saved. The manager's
+5. Finish the level, talk to Ada, and the server scores it. Every decision is
+   recorded, including which clues you inspected first. The manager's
    dashboard shows it within about 10 seconds, or immediately after a refresh.
 
 ## Use it from your phone (same Wi-Fi)
@@ -190,6 +196,22 @@ demo mode and style guide at 390×844 and 1440×900, in light and dark, and save
 them to `test-results/screens/`. It also checks there is no sideways scrolling,
 every button and link shows a focus ring, and phone touch targets are at least
 44 px.
+
+### Editing scenarios
+
+Scenarios live in `content/levels.json`. After editing:
+
+```bash
+python scripts/build_content.py      # regenerate web/js/content-data.js
+python scripts/validate_content.py   # check ids, actions, tags and text lengths
+```
+
+Each scenario lists the skills it tests (`content/skills.json`), the pressure cues it uses,
+a difficulty from 1 to 3, and a severity from 1 to 3 on every action that ends in a
+compromise. The server won't start if the content is invalid. If you move objects or people
+in `web/js/content.js`, run `python scripts/gen_world_refs.py` too.
+
+### Database changes
 
 Database changes go in a new numbered file in `migrations/` (for example
 `0002_certificates.sql`). The server applies new files in order at startup and

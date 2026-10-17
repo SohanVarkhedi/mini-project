@@ -1,0 +1,14 @@
+{
+  "$comment": "Skills each scenario can test. Scenarios list 1-2 skill ids in enc.skills (primary first). icon = a name in web/js/ui.js.",
+  "skills": [
+    {"id": "sender_domains", "name": "Sender and domain checks", "description": "Spot lookalike senders and domains, like novac0rp.com or a vendor's new address.", "icon": "mail"},
+    {"id": "links_qr", "name": "Links and QR codes", "description": "Check where a link or QR code really goes before you open it or sign in.", "icon": "link"},
+    {"id": "attachments", "name": "Attachments and macros", "description": "Treat unexpected files, .html invoices and macro documents as suspect.", "icon": "paperclip"},
+    {"id": "voice", "name": "Phone and voice scams", "description": "Verify callers, even convincing ones, by calling back on a known number.", "icon": "phone"},
+    {"id": "messaging", "name": "Text and chat scams", "description": "Question texts and chats from new numbers or external accounts.", "icon": "chat"},
+    {"id": "mfa_codes", "name": "MFA prompts and one-time codes", "description": "Never share a one-time code or approve a sign-in you didn't start.", "icon": "key"},
+    {"id": "physical", "name": "Devices, desks and printouts", "description": "Handle found devices, unlocked screens, passwords on notes and confidential paper safely.", "icon": "printer"},
+    {"id": "access", "name": "Visitors, doors and tailgating", "description": "Check who someone is before you let them in or help them, and help genuine people.", "icon": "door"},
+    {"id": "payments", "name": "Payment and invoice fraud", "description": "Follow the payment process when someone pushes for an urgent wire or new bank details.", "icon": "rupee"}
+  ]
+}

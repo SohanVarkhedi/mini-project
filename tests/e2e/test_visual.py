@@ -37,7 +37,7 @@ def seeded_url(tmp_path_factory):
     path = tmp_path_factory.mktemp("visual") / "visual.db"
     app = create_app({"DB_PATH": str(path), "SECRET_KEY": "visual-secret", "TESTING": True})
     conn = db.connect(str(path))
-    seed_demo(conn)
+    seed_demo(conn, app.extensions["pv_content"])
     conn.close()
     srv = make_server("127.0.0.1", 0, app, threaded=True)
     t = threading.Thread(target=srv.serve_forever, daemon=True)

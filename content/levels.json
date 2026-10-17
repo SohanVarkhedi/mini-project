@@ -1,0 +1,1864 @@
+{
+  "$comment": "PhishVerse scenario content. Edit here, then run: python scripts/build_content.py && python scripts/validate_content.py",
+  "outcomes": {
+    "safe": {
+      "pts": 1,
+      "label": "Safe call",
+      "icon": "✓",
+      "col": "#22c55e"
+    },
+    "acceptable": {
+      "pts": 0.6,
+      "label": "Not bad",
+      "icon": "~",
+      "col": "#65a30d"
+    },
+    "false_alarm": {
+      "pts": 0.4,
+      "label": "False alarm",
+      "icon": "!",
+      "col": "#f59e0b"
+    },
+    "compromise": {
+      "pts": 0,
+      "label": "Compromised",
+      "icon": "✕",
+      "col": "#ef4444"
+    }
+  },
+  "levels": [
+    {
+      "id": "orientation",
+      "n": 1,
+      "title": "Office Orientation",
+      "topic": "Physical red flags",
+      "minutes": 6,
+      "blurb": "First day at NovaCorp. Meet the team and spot baiting, QR traps, exposed passwords and unlocked screens.",
+      "art": "usb",
+      "start": {
+        "x": 36,
+        "y": 38,
+        "dir": "up"
+      },
+      "intro": [
+        "Welcome to NovaCorp. It's your first day.",
+        "Gold markers show where you're needed. If a goal is off-screen, follow the gold arrow at the edge.",
+        "Start by meeting Ada in the IT & Server Room."
+      ],
+      "tasks": [
+        {
+          "id": "meet",
+          "label": "Meet Ada in IT",
+          "at": {
+            "npc": "ada"
+          },
+          "talk": [
+            "Ah, the new intern. I'm Ada. I lead IT Security here.",
+            "Attackers rarely break through firewalls. They walk in through people.",
+            "Four red flags are hidden on this floor. Each one is glowing gold for you today.",
+            "Inspect each one, then decide what to do. Come back when you're done."
+          ]
+        },
+        {
+          "id": "usb",
+          "label": "USB drive in the cafeteria",
+          "at": {
+            "obj": "usb"
+          },
+          "after": "meet",
+          "enc": {
+            "ch": "object",
+            "title": "A USB drive on the cafeteria floor",
+            "skills": [
+              "physical"
+            ],
+            "cues": [
+              "curiosity"
+            ],
+            "difficulty": 1,
+            "art": {
+              "sprite": "usb",
+              "desc": "A blue USB drive lies under a table. The label reads 'Salary_Revisions_2026'."
+            },
+            "inspect": [
+              {
+                "l": "Read the label",
+                "c": "'Salary_Revisions_2026': a label designed to make you curious.",
+                "f": true
+              },
+              {
+                "l": "Look around",
+                "c": "No one nearby is looking for it. It was left where lots of people pass.",
+                "f": true
+              },
+              {
+                "l": "Check for an asset tag",
+                "c": "No name, no IT asset sticker. Company drives always carry one.",
+                "f": true
+              }
+            ],
+            "acts": [
+              {
+                "l": "Plug it into your laptop to find the owner",
+                "o": "compromise",
+                "fb": "That's exactly what baiting relies on. A malicious drive can run code the moment it's connected.",
+                "sev": 3
+              },
+              {
+                "l": "Hand it to IT without plugging it in",
+                "o": "safe",
+                "fb": "IT can examine it safely on an isolated machine."
+              },
+              {
+                "l": "Leave it where it is",
+                "o": "acceptable",
+                "fb": "You didn't plug it in, but the next person might."
+              },
+              {
+                "l": "Drop it at reception's lost and found",
+                "o": "acceptable",
+                "fb": "Better than plugging it in, but unknown drives should go to IT."
+              }
+            ],
+            "lesson": "Never plug in a drive you didn't get from IT. Curiosity is the attack."
+          }
+        },
+        {
+          "id": "qr",
+          "label": "Free-lunch poster",
+          "at": {
+            "obj": "qr"
+          },
+          "after": "meet",
+          "enc": {
+            "ch": "object",
+            "title": "A free-lunch poster with a QR code",
+            "skills": [
+              "links_qr",
+              "physical"
+            ],
+            "cues": [
+              "reward"
+            ],
+            "difficulty": 1,
+            "art": {
+              "sprite": "qr",
+              "desc": "A bright poster on the cafeteria wall: 'FREE LUNCH TODAY! Scan to claim your voucher.'"
+            },
+            "inspect": [
+              {
+                "l": "Look at the QR code",
+                "c": "The code is a sticker, stuck slightly crooked on top of the printed poster.",
+                "f": true
+              },
+              {
+                "l": "Check who posted it",
+                "c": "No team name or contact. Cafeteria notices come from Facilities.",
+                "f": true
+              },
+              {
+                "l": "Preview the link",
+                "c": "Your camera preview shows nova-lunch-voucher.click/login. That's not a novacorp.com address.",
+                "f": true
+              }
+            ],
+            "acts": [
+              {
+                "l": "Scan it and sign in to claim lunch",
+                "o": "compromise",
+                "fb": "The page was a fake sign-in. Your password now belongs to someone else.",
+                "sev": 2
+              },
+              {
+                "l": "Report the poster to IT",
+                "o": "safe",
+                "fb": "IT and Facilities can take it down before others scan it."
+              },
+              {
+                "l": "Ignore it",
+                "o": "acceptable",
+                "fb": "You're safe, but colleagues may still fall for it."
+              }
+            ],
+            "lesson": "A QR code is just a link you can't read. Treat it like any other link."
+          }
+        },
+        {
+          "id": "sticky",
+          "label": "Note on a monitor",
+          "at": {
+            "obj": "stickyDesk"
+          },
+          "after": "meet",
+          "enc": {
+            "ch": "object",
+            "title": "A sticky note on a monitor",
+            "skills": [
+              "physical"
+            ],
+            "cues": [
+              "curiosity",
+              "helpfulness"
+            ],
+            "difficulty": 1,
+            "art": {
+              "sprite": "sticky",
+              "desc": "On a colleague's monitor: a yellow note reading 'VPN: Summer2026!'. The desk is empty."
+            },
+            "inspect": [
+              {
+                "l": "Read the note",
+                "c": "It's a live VPN password, visible to anyone walking past.",
+                "f": true
+              },
+              {
+                "l": "Check the screen",
+                "c": "The computer isn't locked either.",
+                "f": true
+              }
+            ],
+            "acts": [
+              {
+                "l": "Tell the owner and IT so the password gets changed",
+                "o": "safe",
+                "fb": "Exposed passwords need changing, not just hiding."
+              },
+              {
+                "l": "Leave it, it's not your desk",
+                "o": "acceptable",
+                "fb": "Not your fault, but the password stays exposed."
+              },
+              {
+                "l": "Try it to see if it still works",
+                "o": "compromise",
+                "fb": "Using someone else's credentials is a breach in itself.",
+                "sev": 2
+              },
+              {
+                "l": "Take a photo to remind them later",
+                "o": "compromise",
+                "fb": "Now the password is on your phone too.",
+                "sev": 2
+              }
+            ],
+            "lesson": "Passwords belong in a password manager, never on paper or a screen edge."
+          }
+        },
+        {
+          "id": "laptop",
+          "label": "Unlocked meeting-room laptop",
+          "at": {
+            "obj": "laptop"
+          },
+          "after": "meet",
+          "enc": {
+            "ch": "object",
+            "title": "An unlocked laptop in the meeting room",
+            "skills": [
+              "physical"
+            ],
+            "cues": [
+              "curiosity",
+              "helpfulness"
+            ],
+            "difficulty": 1,
+            "art": {
+              "sprite": "laptop",
+              "desc": "A laptop on the meeting table, unlocked, with the Finance inbox open. The meeting ended twenty minutes ago."
+            },
+            "inspect": [
+              {
+                "l": "Look at the screen",
+                "c": "The Finance inbox is open. Anyone could read or send email as its owner.",
+                "f": true
+              },
+              {
+                "l": "Check the room",
+                "c": "Empty. People walk past the glass wall all the time.",
+                "f": true
+              }
+            ],
+            "acts": [
+              {
+                "l": "Lock the screen (Windows + L) and tell the owner",
+                "o": "safe",
+                "fb": "Two seconds, and nobody can use that session."
+              },
+              {
+                "l": "Close the lid and leave it",
+                "o": "acceptable",
+                "fb": "Some laptops don't lock on close. Locking is safer."
+              },
+              {
+                "l": "Read the emails to find out whose it is",
+                "o": "compromise",
+                "fb": "That's reading confidential data you have no right to see.",
+                "sev": 1
+              },
+              {
+                "l": "Carry it to IT",
+                "o": "acceptable",
+                "fb": "Well meant, but locking it and telling the owner is quicker and safer."
+              }
+            ],
+            "lesson": "Lock your screen every time you stand up: Windows + L, or Ctrl + Cmd + Q on a Mac."
+          }
+        }
+      ]
+    },
+    {
+      "id": "inbox",
+      "n": 2,
+      "title": "Inbox Defense",
+      "topic": "Email phishing",
+      "minutes": 8,
+      "blurb": "Six messages need your decision. Spot lookalike domains, fake logins and poisoned attachments, and trust the real ones.",
+      "art": "mail",
+      "start": {
+        "x": 28,
+        "y": 23,
+        "dir": "up"
+      },
+      "intro": [
+        "Monday, 10:05 AM. Your inbox has filled up overnight.",
+        "Process each email at your desk. Inspect before you decide: check the sender, hover over links, look at attachments.",
+        "Some of these are real. Reporting a genuine email costs time too."
+      ],
+      "tasks": [
+        {
+          "id": "e1",
+          "label": "Password expiry email",
+          "at": {
+            "obj": "myDesk"
+          },
+          "enc": {
+            "ch": "email",
+            "title": "Action required: your password expires in 24 hours",
+            "skills": [
+              "sender_domains",
+              "links_qr"
+            ],
+            "cues": [
+              "urgency",
+              "fear",
+              "authority"
+            ],
+            "difficulty": 1,
+            "art": {
+              "from": "IT Security",
+              "addr": "it-security@novac0rp-support.com",
+              "av": "#dc2626",
+              "time": "9:14 AM",
+              "subj": "Action required: your password expires in 24 hours",
+              "body": [
+                "Hi,",
+                "Your NovaCorp password will expire in 24 hours. To keep your current password and avoid losing access to email and files, confirm it now.",
+                "{link}",
+                "If you do not act, your account will be locked.",
+                "IT Security Team"
+              ],
+              "link": {
+                "t": "Keep my current password",
+                "h": "http://novac0rp-support.com/keep-password"
+              }
+            },
+            "inspect": [
+              {
+                "l": "Check the sender",
+                "c": "novac0rp-support.com has a zero instead of an 'o', and it isn't novacorp.com.",
+                "f": true,
+                "hl": "addr"
+              },
+              {
+                "l": "Hover over the link",
+                "c": "It goes to novac0rp-support.com, not the company intranet.",
+                "f": true,
+                "hl": "link"
+              },
+              {
+                "l": "Read it carefully",
+                "c": "A 24-hour deadline and a threat of being locked out. Pressure is the oldest trick.",
+                "f": true,
+                "hl": "body"
+              }
+            ],
+            "acts": [
+              {
+                "l": "Click the link and sign in",
+                "o": "compromise",
+                "fb": "You just typed your password into an attacker's page.",
+                "sev": 2
+              },
+              {
+                "l": "Report it with the Report Phish button",
+                "o": "safe",
+                "fb": "Reported. IT can now block it for everyone."
+              },
+              {
+                "l": "Delete it",
+                "o": "acceptable",
+                "fb": "You're safe, but reporting protects colleagues too."
+              },
+              {
+                "l": "Reply and ask if it is real",
+                "o": "acceptable",
+                "fb": "The attacker reads replies and will say yes. Check through a channel you trust."
+              }
+            ],
+            "lesson": "IT never asks you to confirm a password through an email link. Go to the intranet yourself."
+          }
+        },
+        {
+          "id": "e2",
+          "label": "\"Shared file\" from NovaDrive",
+          "at": {
+            "obj": "myDesk"
+          },
+          "enc": {
+            "ch": "email",
+            "title": "Priya shared 'Q4 Salary Revisions.xlsx' with you",
+            "skills": [
+              "links_qr",
+              "sender_domains"
+            ],
+            "cues": [
+              "curiosity",
+              "familiarity"
+            ],
+            "difficulty": 2,
+            "art": {
+              "from": "Priya Sharma via NovaDrive",
+              "addr": "no-reply@novadrive-share.co",
+              "av": "#7c3aed",
+              "time": "9:31 AM",
+              "subj": "Priya shared 'Q4 Salary Revisions.xlsx' with you",
+              "body": [
+                "Priya Sharma has shared a file with you.",
+                "Q4 Salary Revisions.xlsx: 'Please review before Friday. Keep this confidential.'",
+                "{link}",
+                "NovaDrive · secure file sharing"
+              ],
+              "link": {
+                "t": "Open in NovaDrive",
+                "h": "https://novadrive-share.co/login?next=salary"
+              }
+            },
+            "inspect": [
+              {
+                "l": "Check the sender",
+                "c": "novadrive-share.co isn't NovaCorp's file service. Real shares come from drive.novacorp.com.",
+                "f": true,
+                "hl": "addr"
+              },
+              {
+                "l": "Hover over the link",
+                "c": "It opens a sign-in page on novadrive-share.co.",
+                "f": true,
+                "hl": "link"
+              },
+              {
+                "l": "Think about the context",
+                "c": "Why would HR send salary data to a new intern? The juicy title is the bait.",
+                "f": true,
+                "hl": "body"
+              }
+            ],
+            "acts": [
+              {
+                "l": "Open it and sign in to view",
+                "o": "compromise",
+                "fb": "A fake sign-in page just captured your credentials.",
+                "sev": 2
+              },
+              {
+                "l": "Report it",
+                "o": "safe",
+                "fb": "Right call. IT will warn anyone else who received it."
+              },
+              {
+                "l": "Ask Priya on NovaChat if she sent it",
+                "o": "safe",
+                "fb": "Checking through a separate, trusted channel is exactly right."
+              },
+              {
+                "l": "Ignore it",
+                "o": "acceptable",
+                "fb": "Safe for you, but a report would protect others."
+              }
+            ],
+            "lesson": "Unexpected 'shared file' emails are a favourite phishing format. Check the domain before you sign in anywhere."
+          }
+        },
+        {
+          "id": "e3",
+          "label": "Maintenance notice from Dev",
+          "at": {
+            "obj": "myDesk"
+          },
+          "enc": {
+            "ch": "email",
+            "title": "Planned maintenance Saturday 10 PM",
+            "legit": true,
+            "skills": [
+              "sender_domains"
+            ],
+            "cues": [
+              "authority"
+            ],
+            "difficulty": 1,
+            "art": {
+              "from": "Dev Patel",
+              "addr": "dev@novacorp.com",
+              "av": "#16a34a",
+              "time": "9:40 AM",
+              "subj": "Planned maintenance Saturday 10 PM",
+              "body": [
+                "Hi all,",
+                "The VPN and email will be offline this Saturday from 10 PM to midnight for upgrades.",
+                "No action is needed. Please save your work before you log off on Friday.",
+                "Thanks, Dev (IT Helpdesk, ext. 4357)"
+              ]
+            },
+            "inspect": [
+              {
+                "l": "Check the sender",
+                "c": "dev@novacorp.com matches the IT Helpdesk entry in the company directory.",
+                "f": false,
+                "hl": "addr"
+              },
+              {
+                "l": "Look for links and attachments",
+                "c": "None. It asks you for nothing.",
+                "f": false,
+                "hl": "body"
+              },
+              {
+                "l": "Read it carefully",
+                "c": "No pressure and no request for passwords. It's purely informational.",
+                "f": false,
+                "hl": "body"
+              }
+            ],
+            "acts": [
+              {
+                "l": "Note it and carry on",
+                "o": "safe",
+                "fb": "Correct. This one is genuine."
+              },
+              {
+                "l": "Report it as phishing",
+                "o": "false_alarm",
+                "fb": "This one was real. Over-reporting costs IT time, so check the sender and the request first."
+              },
+              {
+                "l": "Forward it to your whole team",
+                "o": "acceptable",
+                "fb": "Harmless, but it already went to everyone."
+              }
+            ],
+            "lesson": "Not every email is a threat. A known sender, no links and no request for credentials is a good sign."
+          }
+        },
+        {
+          "id": "e4",
+          "label": "Overdue invoice",
+          "at": {
+            "obj": "myDesk"
+          },
+          "enc": {
+            "ch": "email",
+            "title": "OVERDUE: Invoice #4471 payment failed",
+            "skills": [
+              "attachments",
+              "sender_domains"
+            ],
+            "cues": [
+              "urgency",
+              "fear"
+            ],
+            "difficulty": 2,
+            "art": {
+              "from": "Accounts Receivable",
+              "addr": "billing@acme-supp1ies.com",
+              "av": "#ea580c",
+              "time": "10:02 AM",
+              "subj": "OVERDUE: Invoice #4471 payment failed",
+              "body": [
+                "Dear customer,",
+                "Our records show invoice #4471 is overdue. Please open the attached invoice and confirm your payment details today to avoid late fees.",
+                "Regards, Acme Supplies Billing"
+              ],
+              "attach": {
+                "n": "Invoice_4471.html",
+                "s": "14 KB"
+              }
+            },
+            "inspect": [
+              {
+                "l": "Check the sender",
+                "c": "acme-supp1ies.com uses the number 1 instead of the letter l.",
+                "f": true,
+                "hl": "addr"
+              },
+              {
+                "l": "Check the attachment",
+                "c": "An .html file posing as an invoice. Opening it shows a fake login page.",
+                "f": true,
+                "hl": "attach"
+              },
+              {
+                "l": "Think about the context",
+                "c": "You're an intern. You don't handle vendor invoices, and NovaCorp doesn't use Acme.",
+                "f": true,
+                "hl": "body"
+              }
+            ],
+            "acts": [
+              {
+                "l": "Open the invoice",
+                "o": "compromise",
+                "fb": "The 'invoice' was a credential-harvesting page.",
+                "sev": 1
+              },
+              {
+                "l": "Report it",
+                "o": "safe",
+                "fb": "Good. Invoice lures are one of the most common phishing types."
+              },
+              {
+                "l": "Forward it to Finance to deal with",
+                "o": "compromise",
+                "fb": "You've just sent the trap to the people with payment access.",
+                "sev": 1
+              },
+              {
+                "l": "Delete it",
+                "o": "acceptable",
+                "fb": "Safe, but reporting helps IT block the sender."
+              }
+            ],
+            "lesson": "Invoices arrive as PDFs from known vendors. An .html attachment is a red flag on its own."
+          }
+        },
+        {
+          "id": "e5",
+          "label": "Onboarding email from HR",
+          "at": {
+            "obj": "myDesk"
+          },
+          "enc": {
+            "ch": "email",
+            "title": "Welcome to NovaCorp! Your onboarding checklist",
+            "legit": true,
+            "skills": [
+              "links_qr",
+              "sender_domains"
+            ],
+            "cues": [
+              "familiarity",
+              "authority"
+            ],
+            "difficulty": 1,
+            "art": {
+              "from": "Priya Sharma",
+              "addr": "priya@novacorp.com",
+              "av": "#7c3aed",
+              "time": "10:10 AM",
+              "subj": "Welcome to NovaCorp! Your onboarding checklist",
+              "body": [
+                "Hi and welcome!",
+                "Your onboarding checklist is on the HR portal. Please complete it by the end of your first week.",
+                "{link}",
+                "Priya, People & HR"
+              ],
+              "link": {
+                "t": "Open the HR portal",
+                "h": "https://hr.novacorp.com/onboarding"
+              }
+            },
+            "inspect": [
+              {
+                "l": "Check the sender",
+                "c": "priya@novacorp.com, the real HR address.",
+                "f": false,
+                "hl": "addr"
+              },
+              {
+                "l": "Hover over the link",
+                "c": "hr.novacorp.com/onboarding: the company's own HR portal.",
+                "f": false,
+                "hl": "link"
+              },
+              {
+                "l": "Read it carefully",
+                "c": "No threats, a reasonable deadline, and it matches what Mira told you.",
+                "f": false,
+                "hl": "body"
+              }
+            ],
+            "acts": [
+              {
+                "l": "Open the HR portal",
+                "o": "safe",
+                "fb": "Correct. Genuine email, genuine portal."
+              },
+              {
+                "l": "Report it as phishing",
+                "o": "false_alarm",
+                "fb": "This was legitimate. Being too suspicious slows everyone down."
+              },
+              {
+                "l": "Ignore it",
+                "o": "acceptable",
+                "fb": "No risk, but you'd miss your onboarding tasks."
+              }
+            ],
+            "lesson": "Verify, then act. When the sender, link and request all check out, it's fine to proceed."
+          }
+        },
+        {
+          "id": "e6",
+          "label": "Rex needs a favour",
+          "at": {
+            "npc": "rex"
+          },
+          "enc": {
+            "ch": "person",
+            "title": "Rex wants you to open an attachment",
+            "skills": [
+              "attachments"
+            ],
+            "cues": [
+              "helpfulness",
+              "urgency"
+            ],
+            "difficulty": 2,
+            "art": {
+              "npc": "rex",
+              "lines": [
+                "Hey! Can you open this attachment for me? It's a contract from some vendor.",
+                "It won't open on my laptop. Something about 'enable macros'. Maybe yours will work?"
+              ]
+            },
+            "inspect": [
+              {
+                "l": "Ask where it came from",
+                "c": "'Some vendor,' says Rex. 'Never heard of them, but the subject says URGENT.'",
+                "f": true,
+                "hl": "body"
+              },
+              {
+                "l": "Look at the file name",
+                "c": "Contract_Final.docm: a macro-enabled Word document.",
+                "f": true,
+                "hl": "body"
+              }
+            ],
+            "acts": [
+              {
+                "l": "Open it on your laptop and enable macros",
+                "o": "compromise",
+                "fb": "Macros in unexpected documents are a classic way to install malware.",
+                "sev": 3
+              },
+              {
+                "l": "Tell Rex not to enable macros and to report it",
+                "o": "safe",
+                "fb": "Rex grumbles, but he reports it. Crisis avoided."
+              },
+              {
+                "l": "Say you're busy",
+                "o": "acceptable",
+                "fb": "Rex will just ask someone else."
+              }
+            ],
+            "lesson": "Never enable macros in a document you weren't expecting."
+          }
+        }
+      ]
+    },
+    {
+      "id": "signals",
+      "n": 3,
+      "title": "Calls & Messages",
+      "topic": "Phone, SMS & MFA",
+      "minutes": 8,
+      "blurb": "Vishing calls, smishing texts, MFA-fatigue attacks and a fake CFO on WhatsApp. One request is genuine.",
+      "art": "phone",
+      "start": {
+        "x": 28,
+        "y": 23,
+        "dir": "up"
+      },
+      "intro": [
+        "Tuesday. Attackers know email filters are getting better, so today they'll call and text instead.",
+        "Your desk phone and your mobile will light up around the office. Each one is marked in gold.",
+        "Remember: a caller ID or a profile picture proves nothing."
+      ],
+      "tasks": [
+        {
+          "id": "c1",
+          "label": "Call from \"IT Support\"",
+          "at": {
+            "obj": "myDesk"
+          },
+          "enc": {
+            "ch": "call",
+            "title": "Incoming call from \"IT Support\"",
+            "skills": [
+              "voice",
+              "mfa_codes"
+            ],
+            "cues": [
+              "authority",
+              "urgency",
+              "fear"
+            ],
+            "difficulty": 2,
+            "art": {
+              "caller": "IT Support",
+              "num": "+91 80 4719 2231 · External",
+              "lines": [
+                "Hi, this is Arun from NovaCorp IT. We're seeing suspicious sign-ins on your account.",
+                "I'm sending a code to your phone. Read it back to me and I'll lock the attacker out.",
+                "Quickly please, they're still logged in!"
+              ]
+            },
+            "inspect": [
+              {
+                "l": "Check the caller ID",
+                "c": "An external number, not the internal helpdesk on extension 4357.",
+                "f": true,
+                "hl": "addr"
+              },
+              {
+                "l": "Ask for a ticket number",
+                "c": "'There's no time for a ticket!' He dodges the question.",
+                "f": true,
+                "hl": "body"
+              },
+              {
+                "l": "Think about the request",
+                "c": "A one-time code proves you are you. Anyone asking for it wants to log in as you.",
+                "f": true,
+                "hl": "body"
+              }
+            ],
+            "acts": [
+              {
+                "l": "Read the code out to him",
+                "o": "compromise",
+                "fb": "He just used your code to sign in to your account.",
+                "sev": 2
+              },
+              {
+                "l": "Hang up and call the helpdesk on 4357",
+                "o": "safe",
+                "fb": "Dev confirms nobody from IT called you. Reported."
+              },
+              {
+                "l": "Ask him to email you instead",
+                "o": "acceptable",
+                "fb": "He'll just send a phishing email. Calling the helpdesk yourself is safest."
+              }
+            ],
+            "lesson": "Never share a one-time code. Not with IT, not with your bank, not with anyone."
+          }
+        },
+        {
+          "id": "c2",
+          "label": "Text in the cafeteria",
+          "at": {
+            "obj": "phoneCafe"
+          },
+          "enc": {
+            "ch": "sms",
+            "title": "A text about a parcel",
+            "skills": [
+              "messaging",
+              "links_qr"
+            ],
+            "cues": [
+              "urgency",
+              "fear"
+            ],
+            "difficulty": 1,
+            "art": {
+              "from": "NovaPost",
+              "num": "+91 74811 20937",
+              "text": "NovaPost: your parcel is on hold due to an unpaid customs fee of ₹49. Pay within 12 hrs or it will be returned:",
+              "link": "novapost-delivery.top/pay"
+            },
+            "inspect": [
+              {
+                "l": "Check the sender",
+                "c": "A random mobile number, not a courier's short code.",
+                "f": true,
+                "hl": "addr"
+              },
+              {
+                "l": "Look at the link",
+                "c": "novapost-delivery.top: a cheap domain unrelated to any real courier.",
+                "f": true,
+                "hl": "link"
+              },
+              {
+                "l": "Think about the context",
+                "c": "Are you even expecting a parcel? Tiny fees and tight deadlines are classic bait.",
+                "f": true,
+                "hl": "body"
+              }
+            ],
+            "acts": [
+              {
+                "l": "Pay the ₹49",
+                "o": "compromise",
+                "fb": "Your card details are now with scammers, and the fee was never the point.",
+                "sev": 3
+              },
+              {
+                "l": "Delete it and report it as spam",
+                "o": "safe",
+                "fb": "Good. Reporting helps carriers block the number."
+              },
+              {
+                "l": "Reply STOP",
+                "o": "acceptable",
+                "fb": "Replying confirms your number is active."
+              }
+            ],
+            "lesson": "Couriers don't ask for fees by text link. Track parcels in the official app."
+          }
+        },
+        {
+          "id": "c3",
+          "label": "Sign-in prompts on your phone",
+          "at": {
+            "obj": "phoneHR"
+          },
+          "enc": {
+            "ch": "mfa",
+            "title": "Five sign-in requests in two minutes",
+            "skills": [
+              "mfa_codes"
+            ],
+            "cues": [
+              "urgency"
+            ],
+            "difficulty": 2,
+            "art": {
+              "loc": "Moscow, RU",
+              "count": 5
+            },
+            "inspect": [
+              {
+                "l": "Check the location",
+                "c": "Moscow. You're sitting in the Bengaluru office.",
+                "f": true,
+                "hl": "loc"
+              },
+              {
+                "l": "Did you start this?",
+                "c": "No. You haven't tried to sign in anywhere.",
+                "f": true,
+                "hl": "body"
+              },
+              {
+                "l": "Count the prompts",
+                "c": "Five prompts in two minutes. Someone is trying to wear you down.",
+                "f": true,
+                "hl": "body"
+              }
+            ],
+            "acts": [
+              {
+                "l": "Approve one to make them stop",
+                "o": "compromise",
+                "fb": "That approval let the attacker straight in. They already had your password.",
+                "sev": 2
+              },
+              {
+                "l": "Deny, report to IT and change your password",
+                "o": "safe",
+                "fb": "Exactly. The prompts mean your password is already out there."
+              },
+              {
+                "l": "Ignore them",
+                "o": "acceptable",
+                "fb": "Not approving is good, but IT needs to know your password leaked."
+              }
+            ],
+            "lesson": "An MFA prompt you didn't start means someone has your password. Deny it and report it."
+          }
+        },
+        {
+          "id": "c4",
+          "label": "Dev calls you over",
+          "at": {
+            "npc": "dev"
+          },
+          "enc": {
+            "ch": "person",
+            "title": "Dev asks you to restart your laptop",
+            "legit": true,
+            "skills": [
+              "access"
+            ],
+            "cues": [
+              "authority",
+              "familiarity"
+            ],
+            "difficulty": 1,
+            "art": {
+              "npc": "dev",
+              "lines": [
+                "Hey, about your ticket #4471, the slow laptop.",
+                "I've pushed an update. Can you restart now? I'll watch it come back online from my side."
+              ]
+            },
+            "inspect": [
+              {
+                "l": "Check the ticket",
+                "c": "Ticket #4471 is yours. You raised it this morning.",
+                "f": false,
+                "hl": "body"
+              },
+              {
+                "l": "Check who's asking",
+                "c": "It's Dev, in person, at the helpdesk.",
+                "f": false,
+                "hl": "body"
+              },
+              {
+                "l": "What's being asked?",
+                "c": "Just a restart. No passwords, no codes.",
+                "f": false,
+                "hl": "body"
+              }
+            ],
+            "acts": [
+              {
+                "l": "Restart the laptop",
+                "o": "safe",
+                "fb": "Correct. A verified request that asks for nothing sensitive."
+              },
+              {
+                "l": "Refuse and report Dev to Security",
+                "o": "false_alarm",
+                "fb": "Dev is the real helpdesk, working on your own ticket."
+              },
+              {
+                "l": "Ask him to email the request first",
+                "o": "acceptable",
+                "fb": "Not wrong, but it was already verified in person."
+              }
+            ],
+            "lesson": "Trust is fine when you've verified who is asking and what they want."
+          }
+        },
+        {
+          "id": "c5",
+          "label": "WhatsApp from \"Mr. Hale\"",
+          "at": {
+            "obj": "phoneLobby"
+          },
+          "enc": {
+            "ch": "chat",
+            "title": "WhatsApp from a new number",
+            "skills": [
+              "messaging",
+              "payments"
+            ],
+            "cues": [
+              "authority",
+              "urgency",
+              "secrecy"
+            ],
+            "difficulty": 2,
+            "art": {
+              "app": "WhatsApp",
+              "wa": true,
+              "from": "R. Hale (CFO)",
+              "badge": "Not in contacts",
+              "msgs": [
+                "Hi, this is Hale. New number, my old phone broke.",
+                "I need a favour. Buy 5 Amazon gift cards of ₹10,000 for a client and send me the codes. I'll reimburse you today.",
+                "Keep this between us. It's very urgent."
+              ]
+            },
+            "inspect": [
+              {
+                "l": "Check the number",
+                "c": "It isn't in your contacts, and it isn't Hale's number in the directory.",
+                "f": true,
+                "hl": "addr"
+              },
+              {
+                "l": "Read the request",
+                "c": "Gift cards, secrecy and urgency together: the classic CEO-fraud recipe.",
+                "f": true,
+                "hl": "body"
+              },
+              {
+                "l": "Think about the process",
+                "c": "Real expenses go through the finance portal, never your personal card.",
+                "f": true,
+                "hl": "body"
+              }
+            ],
+            "acts": [
+              {
+                "l": "Buy the gift cards",
+                "o": "compromise",
+                "fb": "₹50,000 gone. Gift card codes are as good as cash.",
+                "sev": 3
+              },
+              {
+                "l": "Verify with Mr. Hale through a known channel",
+                "o": "safe",
+                "fb": "Hale is in his office and has no idea what you're talking about."
+              },
+              {
+                "l": "Ignore it",
+                "o": "acceptable",
+                "fb": "Safe for you, but Security should know someone is impersonating the CFO."
+              },
+              {
+                "l": "Reply asking who it really is",
+                "o": "acceptable",
+                "fb": "The scammer will just insist it's Hale."
+              }
+            ],
+            "lesson": "A new number plus urgency plus secrecy is a scam until proven otherwise."
+          }
+        }
+      ]
+    },
+    {
+      "id": "access",
+      "n": 4,
+      "title": "Access Control",
+      "topic": "Tailgating & pretexting",
+      "minutes": 7,
+      "blurb": "Doors, badges and confident strangers. Decide who gets in, what gets shared and who simply needs directions.",
+      "art": "badge",
+      "start": {
+        "x": 36,
+        "y": 37,
+        "dir": "up"
+      },
+      "intro": [
+        "Wednesday. Today the attackers come in person.",
+        "People with boxes, uniforms and confident stories. Some are exactly who they say they are.",
+        "Ask, verify, and when in doubt, send them to reception."
+      ],
+      "tasks": [
+        {
+          "id": "a1",
+          "label": "Courier at the side door",
+          "at": {
+            "npc": "courier"
+          },
+          "enc": {
+            "ch": "person",
+            "title": "A courier asks you to badge him in",
+            "skills": [
+              "access"
+            ],
+            "cues": [
+              "helpfulness",
+              "urgency"
+            ],
+            "difficulty": 1,
+            "art": {
+              "npc": "courier",
+              "lines": [
+                "Morning! Big delivery for the third floor.",
+                "My hands are full. Could you tap your badge on the side door and hold it for me? Reception is so slow."
+              ]
+            },
+            "inspect": [
+              {
+                "l": "Look for a visitor badge",
+                "c": "No visitor badge or sign-in sticker.",
+                "f": true,
+                "hl": "body"
+              },
+              {
+                "l": "Check the delivery",
+                "c": "The boxes have no NovaCorp label or delivery slip.",
+                "f": true,
+                "hl": "body"
+              },
+              {
+                "l": "Think about the request",
+                "c": "He's asking you to bypass reception, the one checkpoint for visitors.",
+                "f": true,
+                "hl": "body"
+              }
+            ],
+            "acts": [
+              {
+                "l": "Badge him in and hold the door",
+                "o": "compromise",
+                "fb": "Whoever he really is, he's now inside with no record of entry.",
+                "sev": 3
+              },
+              {
+                "l": "Point him to reception to sign in",
+                "o": "safe",
+                "fb": "Polite and firm. Reception handles every visitor."
+              },
+              {
+                "l": "Walk away without a word",
+                "o": "acceptable",
+                "fb": "He'll try the next person. Reception should know."
+              }
+            ],
+            "lesson": "Never let anyone follow you through a secure door. Visitors sign in at reception."
+          }
+        },
+        {
+          "id": "a2",
+          "label": "\"Contractor\" at the server room",
+          "at": {
+            "npc": "vik"
+          },
+          "enc": {
+            "ch": "person",
+            "title": "A contractor wants the server room",
+            "skills": [
+              "access"
+            ],
+            "cues": [
+              "authority",
+              "familiarity"
+            ],
+            "difficulty": 2,
+            "art": {
+              "npc": "vik",
+              "lines": [
+                "Hi, I'm from CoolAir. Here to service the server-room AC.",
+                "Ada said it's fine, she's just busy. Can you let me in?"
+              ]
+            },
+            "inspect": [
+              {
+                "l": "Ask for a work ticket",
+                "c": "He has no ticket number and 'forgot' the paperwork.",
+                "f": true,
+                "hl": "body"
+              },
+              {
+                "l": "Check his ID",
+                "c": "A laminated card with no photo and a logo you don't recognise.",
+                "f": true,
+                "hl": "body"
+              },
+              {
+                "l": "Can you verify with Ada?",
+                "c": "Ada is right inside. Checking takes thirty seconds.",
+                "f": true,
+                "hl": "body"
+              }
+            ],
+            "acts": [
+              {
+                "l": "Let him into the server room",
+                "o": "compromise",
+                "fb": "Physical access to servers is the jackpot for an attacker.",
+                "sev": 3
+              },
+              {
+                "l": "Ask him to wait while you check with Ada",
+                "o": "safe",
+                "fb": "Ada has no AC service booked. Security escorts him out."
+              },
+              {
+                "l": "Tell him to come back tomorrow",
+                "o": "acceptable",
+                "fb": "He'll come back with a better story. Report it today."
+              }
+            ],
+            "lesson": "Name-dropping is not authorisation. Verify with the person named."
+          }
+        },
+        {
+          "id": "a3",
+          "label": "New hire needs directions",
+          "at": {
+            "npc": "kabir"
+          },
+          "enc": {
+            "ch": "person",
+            "title": "A new hire asks for help",
+            "legit": true,
+            "skills": [
+              "access"
+            ],
+            "cues": [
+              "helpfulness"
+            ],
+            "difficulty": 1,
+            "art": {
+              "npc": "kabir",
+              "lines": [
+                "Hi! I'm Kabir, I start in Finance today.",
+                "Mira signed me in and gave me my badge. Could you point me to the HR room for my induction?"
+              ]
+            },
+            "inspect": [
+              {
+                "l": "Check his badge",
+                "c": "A proper NovaCorp badge with his photo and today's date.",
+                "f": false,
+                "hl": "body"
+              },
+              {
+                "l": "Ask Mira",
+                "c": "Mira nods: 'Yes, Kabir's on my list. Welcome!'",
+                "f": false,
+                "hl": "body"
+              },
+              {
+                "l": "What's being asked?",
+                "c": "Directions to HR. No access to anything sensitive.",
+                "f": false,
+                "hl": "body"
+              }
+            ],
+            "acts": [
+              {
+                "l": "Show him the way to HR",
+                "o": "safe",
+                "fb": "A verified colleague, a harmless request. Being helpful is part of security culture."
+              },
+              {
+                "l": "Call Security on him",
+                "o": "false_alarm",
+                "fb": "He was signed in and badged. That's a wasted call."
+              },
+              {
+                "l": "Refuse to help",
+                "o": "false_alarm",
+                "fb": "Being unhelpful to a verified colleague isn't security."
+              }
+            ],
+            "lesson": "Security isn't suspicion of everyone. Verify, then help."
+          }
+        },
+        {
+          "id": "a4",
+          "label": "Confidential printout",
+          "at": {
+            "obj": "printer"
+          },
+          "enc": {
+            "ch": "object",
+            "title": "A confidential printout left in the tray",
+            "skills": [
+              "physical"
+            ],
+            "cues": [
+              "curiosity"
+            ],
+            "difficulty": 1,
+            "art": {
+              "sprite": "printer",
+              "desc": "A stack of pages titled 'Q3 salary bands: CONFIDENTIAL'. Nobody has collected it for an hour."
+            },
+            "inspect": [
+              {
+                "l": "Read the header",
+                "c": "Salary data for every team.",
+                "f": true
+              },
+              {
+                "l": "Check the cover sheet",
+                "c": "Printed by Priya in HR, an hour ago.",
+                "f": true
+              },
+              {
+                "l": "Look around",
+                "c": "The printer sits in a busy corridor next to the water cooler.",
+                "f": true
+              }
+            ],
+            "acts": [
+              {
+                "l": "Take it straight to Priya in HR",
+                "o": "safe",
+                "fb": "Priya thanks you and switches to secure print."
+              },
+              {
+                "l": "Leave it there",
+                "o": "acceptable",
+                "fb": "Anyone could pick it up."
+              },
+              {
+                "l": "Read through it",
+                "o": "compromise",
+                "fb": "You've just seen everyone's salary. That's a data leak in itself.",
+                "sev": 1
+              },
+              {
+                "l": "Throw it in the bin",
+                "o": "compromise",
+                "fb": "Bins aren't shredders. People do go through office rubbish.",
+                "sev": 1
+              }
+            ],
+            "lesson": "Use secure print, collect printouts straight away, and shred what you don't need."
+          }
+        },
+        {
+          "id": "a5",
+          "label": "\"Auditor\" in the cafeteria",
+          "at": {
+            "npc": "zoe"
+          },
+          "enc": {
+            "ch": "person",
+            "title": "A visitor asks network questions",
+            "skills": [
+              "access"
+            ],
+            "cues": [
+              "authority",
+              "helpfulness"
+            ],
+            "difficulty": 2,
+            "art": {
+              "npc": "zoe",
+              "lines": [
+                "Hi! I'm Zoe from NetSecure, doing a quick network audit for your IT team.",
+                "What's the office WiFi password, and which VPN app do you use? Just ticking boxes."
+              ]
+            },
+            "inspect": [
+              {
+                "l": "Check her badge",
+                "c": "A visitor badge, but it says 'Catering'.",
+                "f": true,
+                "hl": "body"
+              },
+              {
+                "l": "Check with IT",
+                "c": "No audit is on the IT calendar today.",
+                "f": true,
+                "hl": "body"
+              },
+              {
+                "l": "Think about the questions",
+                "c": "WiFi passwords and VPN details help an attacker get inside the network.",
+                "f": true,
+                "hl": "body"
+              }
+            ],
+            "acts": [
+              {
+                "l": "Share the details, it sounds official",
+                "o": "compromise",
+                "fb": "Pretexting works because it sounds routine.",
+                "sev": 2
+              },
+              {
+                "l": "Say you can't share that, and alert IT",
+                "o": "safe",
+                "fb": "IT has never heard of NetSecure. Good catch."
+              },
+              {
+                "l": "Send her to reception for the guest WiFi",
+                "o": "acceptable",
+                "fb": "Better than sharing, but the fake audit should be reported."
+              }
+            ],
+            "lesson": "Real auditors go through IT, never through random employees in the cafeteria."
+          }
+        }
+      ]
+    },
+    {
+      "id": "executive",
+      "n": 5,
+      "title": "Executive Floor",
+      "topic": "Business email compromise",
+      "minutes": 10,
+      "blurb": "The boss level. A multi-stage CEO fraud through email, chat and a cloned voice, plus a vendor bank switch and one genuine payment.",
+      "art": "boss",
+      "start": {
+        "x": 24,
+        "y": 12,
+        "dir": "up"
+      },
+      "intro": [
+        "Friday. You're covering for Mr. Hale's assistant on the executive floor.",
+        "Someone is about to try to move ₹18.5 lakh out of the company. It will look like it comes from the very top.",
+        "The CEO fraud happens in stages. Each stage unlocks the next."
+      ],
+      "tasks": [
+        {
+          "id": "b1",
+          "label": "Stage 1: urgent email from the CEO",
+          "at": {
+            "obj": "execDesk"
+          },
+          "enc": {
+            "ch": "email",
+            "title": "Confidential: urgent wire before 4 PM",
+            "skills": [
+              "payments",
+              "sender_domains"
+            ],
+            "cues": [
+              "authority",
+              "urgency",
+              "secrecy"
+            ],
+            "difficulty": 2,
+            "art": {
+              "from": "Elena Vance (CEO)",
+              "addr": "elena.vance@novacorp-exec.com",
+              "av": "#0f766e",
+              "time": "2:41 PM",
+              "subj": "Confidential: urgent wire before 4 PM",
+              "body": [
+                "Hi,",
+                "We're closing a confidential acquisition today. I need you to wire ₹18,50,000 to our new legal partner before 4 PM.",
+                "Account: 50200081472219 · IFSC: HDFC0004471 · Larkspur Legal LLP",
+                "Do not discuss this with anyone, including Finance. I'm in meetings all day, so email only.",
+                "Elena"
+              ]
+            },
+            "inspect": [
+              {
+                "l": "Check the sender",
+                "c": "novacorp-exec.com is not novacorp.com. Anyone can register a lookalike domain.",
+                "f": true,
+                "hl": "addr"
+              },
+              {
+                "l": "Read it carefully",
+                "c": "Secrecy, a hard deadline and 'don't tell Finance'. Every pressure lever at once.",
+                "f": true,
+                "hl": "body"
+              },
+              {
+                "l": "Check the process",
+                "c": "Payments over ₹1 lakh need CFO approval in the finance portal. This skips it.",
+                "f": true,
+                "hl": "body"
+              }
+            ],
+            "acts": [
+              {
+                "l": "Send the wire",
+                "o": "compromise",
+                "fb": "₹18.5 lakh is gone, and banks rarely recover BEC losses.",
+                "sev": 3
+              },
+              {
+                "l": "Verify with Mr. Hale in the finance portal",
+                "o": "safe",
+                "fb": "There is no such request in the portal. You've stopped stage one."
+              },
+              {
+                "l": "Reply and ask if it is really her",
+                "o": "acceptable",
+                "fb": "The attacker controls that inbox and will say yes."
+              },
+              {
+                "l": "Forward it to Finance to pay",
+                "o": "compromise",
+                "fb": "You've passed the fraud to the people who can actually send money.",
+                "sev": 3
+              }
+            ],
+            "lesson": "Any payment request that bypasses the normal approval process is a red flag, whoever it claims to come from."
+          }
+        },
+        {
+          "id": "b2",
+          "label": "Stage 2: chat pressure",
+          "at": {
+            "obj": "execDesk"
+          },
+          "after": "b1",
+          "enc": {
+            "ch": "chat",
+            "title": "NovaChat message from \"Elena Vance\"",
+            "skills": [
+              "messaging",
+              "payments"
+            ],
+            "cues": [
+              "authority",
+              "urgency",
+              "reward"
+            ],
+            "difficulty": 2,
+            "art": {
+              "app": "NovaChat",
+              "from": "Elena Vance",
+              "badge": "External",
+              "msgs": [
+                "Did you see my email? This can't wait.",
+                "The board is watching this deal. I'll remember who helped today.",
+                "Just send it, then send me the receipt."
+              ]
+            },
+            "inspect": [
+              {
+                "l": "Look at the account label",
+                "c": "'External': this account is outside the NovaCorp workspace.",
+                "f": true,
+                "hl": "addr"
+              },
+              {
+                "l": "Read the tone",
+                "c": "Flattery plus pressure: 'I'll remember who helped today.'",
+                "f": true,
+                "hl": "body"
+              },
+              {
+                "l": "Cross-check her calendar",
+                "c": "Elena's calendar shows her on a flight right now.",
+                "f": true,
+                "hl": "body"
+              }
+            ],
+            "acts": [
+              {
+                "l": "Send the wire to make the pressure stop",
+                "o": "compromise",
+                "fb": "Pressure is the attacker's main tool. It worked.",
+                "sev": 3
+              },
+              {
+                "l": "Report the account to IT Security",
+                "o": "safe",
+                "fb": "IT blocks the external account and alerts the leadership team."
+              },
+              {
+                "l": "Mute the chat",
+                "o": "acceptable",
+                "fb": "You resisted, but Security needs to know."
+              }
+            ],
+            "lesson": "Attackers switch channels to add pressure. A second channel is not a second proof."
+          }
+        },
+        {
+          "id": "b3",
+          "label": "Stage 3: a call from \"the CEO\"",
+          "at": {
+            "obj": "meeting"
+          },
+          "after": "b2",
+          "enc": {
+            "ch": "call",
+            "title": "Conference phone: \"Elena Vance\"",
+            "skills": [
+              "voice",
+              "payments"
+            ],
+            "cues": [
+              "authority",
+              "urgency"
+            ],
+            "difficulty": 3,
+            "art": {
+              "caller": "Elena Vance",
+              "num": "+44 20 7946 0123 · Unknown",
+              "lines": [
+                "It's Elena. I'm about to board. Listen, the wire has to go now.",
+                "I know it's unusual. I'm authorising it personally. Do it and I'll sort out the paperwork later."
+              ]
+            },
+            "inspect": [
+              {
+                "l": "Check the number",
+                "c": "A UK number. Elena's mobile is in the directory, and it isn't this one.",
+                "f": true,
+                "hl": "addr"
+              },
+              {
+                "l": "Listen closely",
+                "c": "The voice sounds slightly flat, with odd pauses. Voices can be cloned from public videos.",
+                "f": true,
+                "hl": "body"
+              },
+              {
+                "l": "Ask a verification question",
+                "c": "You ask about this morning's all-hands. 'No time for this!' She dodges.",
+                "f": true,
+                "hl": "body"
+              }
+            ],
+            "acts": [
+              {
+                "l": "Send the wire, she authorised it",
+                "o": "compromise",
+                "fb": "A cloned voice is still a fraud. The money is gone.",
+                "sev": 3
+              },
+              {
+                "l": "Hang up and call Elena's directory number",
+                "o": "safe",
+                "fb": "The real Elena is boarding a plane, horrified. You stopped all three stages."
+              },
+              {
+                "l": "Tell her you'll do it after lunch",
+                "o": "acceptable",
+                "fb": "You bought time, but you should hang up and verify now."
+              }
+            ],
+            "lesson": "Hang up and call back on a number you already trust. Voices and faces can be faked."
+          }
+        },
+        {
+          "id": "b4",
+          "label": "Payment request from Mr. Hale",
+          "at": {
+            "npc": "hale"
+          },
+          "enc": {
+            "ch": "person",
+            "title": "Mr. Hale asks you to check a payment",
+            "legit": true,
+            "skills": [
+              "payments"
+            ],
+            "cues": [
+              "authority"
+            ],
+            "difficulty": 2,
+            "art": {
+              "npc": "hale",
+              "lines": [
+                "Ah, good, you're here.",
+                "I've raised payment request FIN-2291 for our cleaning vendor in the finance portal. It's approved on my side.",
+                "Could you mark it as checked? Same vendor as every month."
+              ]
+            },
+            "inspect": [
+              {
+                "l": "Check the request",
+                "c": "FIN-2291 is in the finance portal with Hale's approval attached.",
+                "f": false,
+                "hl": "body"
+              },
+              {
+                "l": "Check the vendor",
+                "c": "BrightClean, paid monthly for two years, to the same bank account as always.",
+                "f": false,
+                "hl": "body"
+              },
+              {
+                "l": "Check who's asking",
+                "c": "Mr. Hale, in person, using the normal process.",
+                "f": false,
+                "hl": "body"
+              }
+            ],
+            "acts": [
+              {
+                "l": "Mark it as checked in the portal",
+                "o": "safe",
+                "fb": "Correct. Right person, right process, known vendor."
+              },
+              {
+                "l": "Refuse and report it as fraud",
+                "o": "false_alarm",
+                "fb": "This was the proper process. Not everything urgent is fraud."
+              },
+              {
+                "l": "Ask him to email you first",
+                "o": "acceptable",
+                "fb": "Harmless, but he's already using the proper channel."
+              }
+            ],
+            "lesson": "Real requests follow the process. That's what makes fakes easy to spot."
+          }
+        },
+        {
+          "id": "b5",
+          "label": "Vendor bank-detail change",
+          "at": {
+            "obj": "myDesk"
+          },
+          "enc": {
+            "ch": "email",
+            "title": "Updated bank details for future payments",
+            "skills": [
+              "payments",
+              "sender_domains"
+            ],
+            "cues": [
+              "familiarity",
+              "urgency"
+            ],
+            "difficulty": 3,
+            "art": {
+              "from": "Ramesh (BrightClean Accounts)",
+              "addr": "accounts@brightclean-services.in",
+              "av": "#0284c7",
+              "time": "3:05 PM",
+              "subj": "Updated bank details for future payments",
+              "body": [
+                "Dear NovaCorp team,",
+                "Due to an audit, our bank account has changed. Please update our details before your next payment run.",
+                "New account: 9182 7346 1100 · IFSC: ICIC0008812",
+                "Kindly confirm once updated. Regards, Ramesh"
+              ]
+            },
+            "inspect": [
+              {
+                "l": "Check the sender",
+                "c": "brightclean-services.in, but BrightClean always writes from brightclean.in.",
+                "f": true,
+                "hl": "addr"
+              },
+              {
+                "l": "Check the request",
+                "c": "It changes where money goes, right before a payment run.",
+                "f": true,
+                "hl": "body"
+              },
+              {
+                "l": "Check the process",
+                "c": "Vendor bank changes must be confirmed by phone, on the number in the contract.",
+                "f": true,
+                "hl": "body"
+              }
+            ],
+            "acts": [
+              {
+                "l": "Update the bank details",
+                "o": "compromise",
+                "fb": "Next month's payment goes straight to the attacker.",
+                "sev": 3
+              },
+              {
+                "l": "Call BrightClean on the number in the contract",
+                "o": "safe",
+                "fb": "BrightClean's bank details haven't changed. Fraud stopped."
+              },
+              {
+                "l": "Reply to the email to confirm",
+                "o": "acceptable",
+                "fb": "Replying reaches the attacker, who will happily confirm."
+              },
+              {
+                "l": "Forward it to Finance to check",
+                "o": "acceptable",
+                "fb": "Better than acting on it, but you could have verified it yourself."
+              }
+            ],
+            "lesson": "Always confirm bank-detail changes by phone, using contact details you already had."
+          }
+        }
+      ]
+    }
+  ]
+}

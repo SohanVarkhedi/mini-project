@@ -97,14 +97,41 @@ async function loadLocalState(){const s=await API('state');Store.config=Object.a
 async function writeLocal(path,data){const[c,id]=path.split('/');
   try{if(c==='assignments')await API('assignments/'+encodeURIComponent(id),data===null?{method:'DELETE'}:{method:'PUT',body:JSON.stringify(data)});
     else if(c==='config')await API('config',{method:'PUT',body:JSON.stringify(data)});
-    else if(c==='progress')await API('progress',{method:'PUT',body:JSON.stringify(data)});
     else if(c==='members')await API('profile',{method:'PUT',body:JSON.stringify(data)});
     loadLocalState().catch(()=>{});return true}catch(e){return e.status===403?'invalid_argument':'error'}}
 async function logoutLocal(){try{await API('logout',{method:'POST',body:'{}'})}catch(e){}Store.authed=false;Store.members={};Store.assignments={};Store.progress={};Store.myMember=Store.myAssign=Store.myProg=null;Store.me={id:'',name:'',avatar:''};
   if(location.hash)history.replaceState(null,'',location.pathname+location.search);renderPortal()}
+/* ---------- recording a play (local mode: the server records and scores every decision) ---------- */
+const CLIENT_VERSION='pv-web-2';
+let play=null; /* {levelId, queue: Promise<session id|null>, unsent: [decision bodies]} */
+onLevelStart=lid=>{
+  if(Store.mode!=='local'||!Store.authed){play=null;return}
+  const a=assignFor(Store.me.id,Store.myMember,Store.myAssign),purpose=a&&a.levels.includes(lid)?'baseline':'practice';
+  const p={levelId:lid,unsent:[]};
+  p.queue=API('sessions',{method:'POST',body:JSON.stringify({level_id:lid,purpose,client_version:CLIENT_VERSION})}).then(r=>r.id).catch(()=>null);
+  play=p;
+};
+const sendDecision=(sid,body)=>API(`sessions/${encodeURIComponent(sid)}/decisions`,{method:'POST',body:JSON.stringify(body)}).then(()=>true).catch(e=>e.status===409);/* 409: already recorded */
+onDecision=(lid,task,d)=>{
+  const p=play;if(!p||p.levelId!==lid)return;
+  const body={task_id:task.id,action_index:d.act,inspected:d.inspected,response_ms:d.ms};
+  p.queue=p.queue.then(async sid=>{if(sid&&!await sendDecision(sid,body))p.unsent.push(body);return sid});
+};
+async function finishPlay(lid){
+  const p=play;if(!p||p.levelId!==lid)return null;
+  const sid=await p.queue;if(!sid)return null;
+  for(const body of p.unsent.splice(0))if(!await sendDecision(sid,body))return null;
+  try{const r=await API(`sessions/${encodeURIComponent(sid)}/finish`,{method:'POST',body:'{}'});if(play===p)play=null;return r}catch(e){return null}
+}
 let progQ=Promise.resolve();
 onLevelComplete=(lid,s)=>{
   progQ=progQ.then(async()=>{
+    if(Store.mode==='local'){
+      const r=await finishPlay(lid);
+      if(!r)return{saved:false,msg:"Couldn't reach the server, so this result wasn't saved. The score above was worked out on this device."};
+      await loadLocalState().catch(()=>{});return{saved:true,score:r.score,stars:r.stars};
+    }
+    /* demo and live modes score on the device */
     const cur=JSON.parse(JSON.stringify(Store.myProg||{levels:{}}));cur.levels=cur.levels||{};const L=cur.levels[lid]||{attempts:0,best:0,stars:0};
     L.attempts=(L.attempts||0)+1;L.last=s.score;if(s.score>=(L.best||0)){L.best=s.score;L.outcomes=s.outcomes}L.stars=Math.max(L.stars||0,s.stars);L.done=true;L.completedAt=Date.now();L.timeMs=s.timeMs;
     cur.levels[lid]=L;cur.lastActive=Date.now();

@@ -41,6 +41,15 @@ const UI=(()=>{
     star:'<path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/>',
     mail:'<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3.5 6.5 8.5 7 8.5-7"/>',
     shield:'<path d="M12 2.5 20 6v6c0 5-3.4 8.4-8 9.5-4.6-1.1-8-4.5-8-9.5V6z"/>',
+    /* skill icons (content/skills.json) */
+    link:'<path d="M10 14a4.5 4.5 0 0 0 6.4 0l3-3a4.5 4.5 0 0 0-6.4-6.4l-1 1"/><path d="M14 10a4.5 4.5 0 0 0-6.4 0l-3 3a4.5 4.5 0 0 0 6.4 6.4l1-1"/>',
+    paperclip:'<path d="m20 11.5-8.2 8.2a5 5 0 0 1-7.1-7.1l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7l-8.5 8.5a1.7 1.7 0 0 1-2.4-2.4l7.8-7.8"/>',
+    phone:'<path d="M5 3.5h3.2l1.6 4.2-2.1 1.4a11 11 0 0 0 5.2 5.2l1.4-2.1 4.2 1.6V17a2.5 2.5 0 0 1-2.5 2.5A15 15 0 0 1 2.5 6 2.5 2.5 0 0 1 5 3.5z"/>',
+    chat:'<path d="M4 5h16v11H9l-5 4z"/><path d="M8 9.5h8M8 12.5h5"/>',
+    key:'<circle cx="8" cy="15" r="4.5"/><path d="m11.2 11.8 8.3-8.3M16 7l2.5 2.5M14 9l2 2"/>',
+    printer:'<path d="M7 9V3.5h10V9"/><rect x="3" y="9" width="18" height="8" rx="2"/><path d="M7 14h10v6.5H7z"/>',
+    door:'<path d="M5 21V3.5h11V21M3 21h18"/><path d="M16 5.5 20 4v17"/><circle cx="12.5" cy="12.5" r=".8"/>',
+    rupee:'<path d="M7 4h11M7 8.5h11M7 4h3.5a4.5 4.5 0 0 1 0 9H7l8.5 7.5"/>',
   };
   const icon=(name,cls='')=>`<svg class="icon ${cls}" viewBox="0 0 24 24" aria-hidden="true" focusable="false">${P[name]||P.circle}</svg>`;
   const mark=(lg)=>`<span class="mark${lg?' mark--lg':''}" aria-hidden="true"><svg viewBox="0 0 46 52" fill="none"><path d="M23 3 41 9.5v14.2c0 11.4-7.4 20-18 24.8C12.4 43.7 5 35.1 5 23.7V9.5L23 3Z" fill="currentColor"/><path class="mark-check" d="M14.5 26.5l6 6L32 20.5" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>`;

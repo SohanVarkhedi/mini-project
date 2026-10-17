@@ -54,7 +54,7 @@ def main():
         return
     if args.seed_demo:
         conn = db.connect(app.config["DB_PATH"])
-        seed_demo(conn)
+        seed_demo(conn, app.extensions["pv_content"])
         conn.close()
 
     host = "0.0.0.0" if args.lan else args.host

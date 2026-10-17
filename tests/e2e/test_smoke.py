@@ -1,11 +1,13 @@
 """
 Browser smoke test: two devices at once, the way the demo runs.
 
-A desktop manager and a phone employee share one server. The level is completed
-through the window test hooks (G, summary, showResults) instead of walking the map.
+A desktop manager and a phone employee share one server. The employee answers every
+scenario through the real encounter UI (opened with the openEncounter test hook instead of
+walking the map); the server records each decision and scores the level.
 """
 import pathlib
 import re
+import sqlite3
 import threading
 
 import pytest
@@ -26,9 +28,13 @@ EMPLOYEE = {"name": "Kavya Rao", "dept": "Finance", "email": "kavya@novacorp.loc
 LEVEL1_OUTCOMES = {"usb": "safe", "qr": "safe", "sticky": "safe", "laptop": "acceptable"}
 
 
+DB = {}
+
+
 @pytest.fixture(scope="module")
 def server_url(tmp_path_factory):
     db_path = tmp_path_factory.mktemp("e2e") / "e2e.db"
+    DB["path"] = str(db_path)
     app = create_app({"DB_PATH": str(db_path), "SECRET_KEY": "e2e-secret", "TESTING": True})
     srv = make_server("127.0.0.1", 0, app, threaded=True)  # port 0 = any free port
     t = threading.Thread(target=srv.serve_forever, daemon=True)
@@ -117,13 +123,29 @@ def test_manager_and_employee_on_two_devices(server_url, desktop, phone):
     expect(emp.locator("#game")).to_be_visible()
     emp.wait_for_function("() => window.G && window.G.level.id === 'orientation'")
 
-    # Complete it through the test hooks; showResults saves via onLevelComplete.
-    score = emp.evaluate("""(outs) => {
-        for (const t of G.level.tasks) G.res[t.id] = t.enc ? {o: outs[t.id], insp: 2, ms: 1500} : {o: 'talk'};
-        const s = summary(); G.finished = true; showResults(s); return s.score;
-    }""", LEVEL1_OUTCOMES)
-    assert score == 90
+    # Answer each scenario in the encounter UI: inspect one clue, pick the action, continue.
+    emp.wait_for_selector("#dlg:not([hidden])")
+    emp.evaluate("() => closeDialog()")
+    for task_id, outcome in LEVEL1_OUTCOMES.items():
+        idx = emp.evaluate("""([id, o]) => { const t = G.level.tasks.find(x => x.id === id); openEncounter(t);
+            return t.enc.acts.findIndex(a => a.o === o) }""", [task_id, outcome])
+        emp.locator('#encIns [data-i="0"]').tap()
+        emp.locator(f'#encActs [data-a="{idx}"]').tap()
+        emp.locator("#encDone").tap()
+    emp.evaluate("() => { G.res.meet = {o: 'talk'}; G.finished = true; showResults(summary()) }")
     expect(emp.locator("#savedNote")).to_have_text("Saved to your training record.")
+    expect(emp.locator(".res .score b")).to_have_text("90%")
+
+    # The server recorded one session and one decision per scenario, and scored it.
+    conn = sqlite3.connect(DB["path"])
+    sessions = conn.execute("SELECT id, level_id, purpose, score, stars, finished_at FROM play_sessions").fetchall()
+    assert len(sessions) == 1
+    sid, level_id, purpose, score, stars, finished_at = sessions[0]
+    assert (level_id, purpose, score, stars) == ("orientation", "baseline", 90, 3) and finished_at
+    rows = conn.execute("SELECT task_id, outcome, inspected_json FROM decisions WHERE session_id=? ORDER BY id", (sid,)).fetchall()
+    conn.close()
+    assert [(t, o) for t, o, _ in rows] == list(LEVEL1_OUTCOMES.items())
+    assert all(i == "[0]" for _, _, i in rows)
     emp.locator("#resBack").tap()
     expect(emp.locator("#portal")).to_be_visible()
     expect(emp.locator('.j-step[data-state="done"]')).to_have_count(1)
@@ -152,3 +174,23 @@ def test_file_demo_mode_starts_a_level(desktop):
     expect(page.locator("#dlgName")).to_contain_text("NovaCorp HQ")
     page.wait_for_timeout(500)  # let a few frames render
     assert errors == []
+
+
+def test_unreachable_server_shows_local_result(server_url, desktop):
+    """If the session API can't be reached, the player still sees their score and is told it wasn't saved."""
+    page = desktop.new_page()
+    page.goto(server_url)
+    page.locator('[data-am="register"]').click()
+    page.fill("#aName", "Offline Olivia")
+    page.fill("#aEmail", "olivia@novacorp.local")
+    page.fill("#aPw", "olivia-pass-1")
+    page.click("#authBtn")
+    expect(page.locator("#greetH")).to_have_text("Hi Offline")
+    page.route("**/api/sessions**", lambda route: route.abort())
+    page.locator('.journey [data-play="orientation"]').click()
+    page.wait_for_function("() => window.G && window.G.level.id === 'orientation'")
+    page.evaluate("""() => { for (const t of scoredTasks(G.level)) onDecision(G.level.id, t, {act: 1, o: 'safe', inspected: [], ms: 1});
+        for (const t of G.level.tasks) G.res[t.id] = t.enc ? {o: 'safe', insp: 0} : {o: 'talk'};
+        G.finished = true; showResults(summary()) }""")
+    expect(page.locator("#savedNote")).to_contain_text("wasn't saved")
+    expect(page.locator(".res .score b")).to_have_text("100%")

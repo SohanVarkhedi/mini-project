@@ -68,3 +68,36 @@ def sign_in(app):
         login(c, email, password)
         return c
     return _sign_in
+
+
+@pytest.fixture
+def content(app):
+    return app.extensions["pv_content"]
+
+
+def action_for(content, level_id, task_id, outcome):
+    """Index of the first action in a scenario with the given outcome."""
+    acts = content.scored_task(level_id, task_id)["enc"]["acts"]
+    return next(i for i, a in enumerate(acts) if a["o"] == outcome)
+
+
+@pytest.fixture
+def play(content):
+    """play(client, level_id, outcomes={task_id: outcome}, default="safe") -> finish response JSON.
+
+    Plays a whole level through the API the way the game does: start, one decision per scenario, finish.
+    """
+    def _play(client, level_id, outcomes=None, default="safe", purpose="baseline"):
+        outcomes = outcomes or {}
+        r = client.post("/api/sessions", json={"level_id": level_id, "purpose": purpose})
+        assert r.status_code == 201, r.get_json()
+        sid = r.get_json()["id"]
+        for t in content.scored_tasks(level_id):
+            idx = action_for(content, level_id, t["id"], outcomes.get(t["id"], default))
+            d = client.post(f"/api/sessions/{sid}/decisions", json={"task_id": t["id"], "action_index": idx,
+                                                                   "inspected": [0], "response_ms": 4000})
+            assert d.status_code == 201, d.get_json()
+        f = client.post(f"/api/sessions/{sid}/finish", json={})
+        assert f.status_code == 200, f.get_json()
+        return f.get_json()
+    return _play

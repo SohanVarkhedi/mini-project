@@ -23,8 +23,11 @@ def test_employee_cannot_assign_self(employee):
     ("put", "/api/assignments/u_x", ASSIGN),
     ("delete", "/api/assignments/u_x", {}),
     ("put", "/api/config", {"defaultLevels": []}),
-    ("put", "/api/progress", {"levels": {}}),
     ("put", "/api/profile", {"name": "X"}),
+    ("post", "/api/sessions", {"level_id": "orientation"}),
+    ("get", "/api/sessions/s_x", None),
+    ("post", "/api/sessions/s_x/decisions", {"task_id": "usb", "action_index": 1}),
+    ("post", "/api/sessions/s_x/finish", {}),
 ])
 def test_signed_out_gets_401(client, method, path, body):
     kw = {} if body is None else {"json": body}
@@ -38,8 +41,10 @@ def test_signed_out_gets_401(client, method, path, body):
     ("put", "/api/assignments/u_x"),
     ("delete", "/api/assignments/u_x"),
     ("put", "/api/config"),
-    ("put", "/api/progress"),
     ("put", "/api/profile"),
+    ("post", "/api/sessions"),
+    ("post", "/api/sessions/s_x/decisions"),
+    ("post", "/api/sessions/s_x/finish"),
 ])
 def test_non_json_mutation_gets_415(manager, method, path):
     r = getattr(manager, method)(path, data="levels=orientation",
@@ -66,13 +71,13 @@ def test_assignment_validation(manager, make_user):
     assert manager.put(f"/api/assignments/{uid}", json={**ASSIGN, "due": "31/12/2026"}).status_code == 400
 
 
-def test_employee_state_only_has_own_data(app, employee, manager, make_user, sign_in):
+def test_employee_state_only_has_own_data(app, employee, manager, make_user, sign_in, play):
     c, uid = employee
     other = make_user("ben@novacorp.local", name="Ben Secretname")
     manager.put(f"/api/assignments/{other}", json={**ASSIGN, "note": "private-note-for-ben"})
     manager.put(f"/api/assignments/{uid}", json=ASSIGN)
     ben = sign_in("ben@novacorp.local")
-    ben.put("/api/progress", json={"levels": {"orientation": {"best": 77, "done": True}}})
+    play(ben, "orientation", {"usb": "compromise"})
 
     r = c.get("/api/state")
     assert r.status_code == 200
@@ -85,9 +90,15 @@ def test_employee_state_only_has_own_data(app, employee, manager, make_user, sig
         assert leak not in text
 
 
-def test_progress_is_saved_for_self_only(employee, manager, make_user):
+def test_progress_is_saved_for_self_only(employee, manager, make_user, play):
     c, uid = employee
     other = make_user("ben@novacorp.local")
-    c.put("/api/progress", json={"user_id": other, "levels": {"orientation": {"best": 50, "done": True}}})
+    play(c, "orientation")
     prog = manager.get("/api/state").get_json()["progress"]
     assert uid in prog and other not in prog
+
+
+def test_progress_endpoint_removed(employee):
+    c, _ = employee
+    r = c.put("/api/progress", json={"levels": {"orientation": {"best": 100, "done": True}}})
+    assert r.status_code == 405

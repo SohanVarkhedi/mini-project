@@ -371,7 +371,7 @@ function artHTML(e){
 }
 function shuffleSeed(arr,seed){const a=arr.map((x,i)=>({x,k:hash(seed,i)}));a.sort((p,q)=>p.k-q.k);return a.map(p=>p.x)}
 function openEncounter(t){
-  const e=t.enc,lv=G.level,sc=scoredTasks(lv),n=sc.indexOf(t)+1,t0=performance.now();let used=0;
+  const e=t.enc,lv=G.level,sc=scoredTasks(lv),n=sc.indexOf(t)+1,t0=performance.now();let used=0;const seen=[];
   const acts=shuffleSeed(e.acts,t.id.charCodeAt(0)*31+t.id.length+(G.attempt||0));
   openModal(`<div class="mcard" role="dialog" aria-label="${esc(e.title)}"><div class="mhead"><span class="chip">${CHN[e.ch]}</span><h3>${esc(e.title)}</h3><span class="step-n">Scenario ${n} of ${sc.length}</span><button class="icon-btn" type="button" id="encX" aria-label="Step away">✕</button></div>
    <div class="encb"><div class="art">${artHTML(e)}</div><div class="side"><div><h4>Inspect</h4><div class="ibtns" id="encIns">${e.inspect.map((s,i)=>`<button class="ibtn" type="button" data-i="${i}">🔍 ${esc(s.l)}</button>`).join('')}</div></div>
@@ -380,11 +380,12 @@ function openEncounter(t){
   const slot=modal.querySelector('#sceneSlot');if(slot)slot.replaceWith(sceneCanvas(e));
   const st=modal.querySelector('#mstatus');modal.querySelectorAll('[data-href]').forEach(a=>{const show=()=>{if(st){st.textContent='→ '+a.dataset.href}};a.addEventListener('mouseenter',show);a.addEventListener('focus',show);a.addEventListener('click',ev=>{ev.preventDefault();show();a.animate([{transform:'translateX(0)'},{transform:'translateX(-4px)'},{transform:'translateX(4px)'},{transform:'translateX(0)'}],{duration:260})});a.addEventListener('mouseleave',()=>{if(st&&!a.classList.contains('hl-red')&&!a.classList.contains('hl-green'))st.textContent='Hover over a link to see where it really goes'})});
   $('encX').addEventListener('click',closeModal);
-  $('encIns').addEventListener('click',ev=>{const b=ev.target.closest('[data-i]');if(!b||b.classList.contains('used'))return;b.classList.add('used');used++;const s=e.inspect[+b.dataset.i];sfx('click');
+  $('encIns').addEventListener('click',ev=>{const b=ev.target.closest('[data-i]');if(!b||b.classList.contains('used'))return;b.classList.add('used');used++;seen.push(+b.dataset.i);const s=e.inspect[+b.dataset.i];sfx('click');
     const ul=$('encClues');ul.querySelector('.none')?.remove();const li=document.createElement('li');li.className=s.f?'red':'green';li.innerHTML=`<i>${s.f?'!':'✓'}</i><span></span>`;li.querySelector('span').textContent=s.c;ul.append(li);
     if(s.hl)modal.querySelectorAll(`[data-hl="${s.hl}"]`).forEach(el=>{el.classList.remove('hl-red','hl-green');void el.offsetWidth;el.classList.add(s.f?'hl-red':'hl-green')});
     if(s.hl==='link'&&st){const l=modal.querySelector('[data-hl="link"][data-href]');if(l)st.textContent='→ '+l.dataset.href}});
-  $('encActs').addEventListener('click',ev=>{const b=ev.target.closest('[data-a]');if(!b)return;const a=e.acts[+b.dataset.a];showVerdict(t,a,{insp:used,ms:Math.round(performance.now()-t0)})});
+  $('encActs').addEventListener('click',ev=>{const b=ev.target.closest('[data-a]');if(!b)return;const ai=+b.dataset.a,a=e.acts[ai],meta={insp:used,seen:seen.slice(),ms:Math.round(performance.now()-t0)};
+    try{onDecision(lv.id,t,{act:ai,o:a.o,inspected:meta.seen,ms:meta.ms})}catch(err){console.warn('onDecision failed',err)}showVerdict(t,a,meta)});
 }
 function showVerdict(t,a,meta){
   const e=t.enc,O=OUT[a.o];modalClosable=false;sfx(a.o==='safe'?'quest':a.o==='compromise'?'bad':'next');
@@ -392,7 +393,7 @@ function showVerdict(t,a,meta){
   card.innerHTML=`<div class="mhead"><span class="chip">${CHN[e.ch]}</span><h3>${esc(e.title)}</h3></div><div class="result"><div class="verdict v-${a.o}"><div class="big">${O.icon}</div><div><h3>${O.label}</h3><p>${esc(a.fb)}</p></div></div>
    <div><h4 style="margin:0 0 8px;font:800 10px/1 ${UIF};letter-spacing:.14em;text-transform:uppercase;color:var(--muted)">${e.legit?'Why this one was genuine':'Red flags to look for'}</h4><ul class="clues">${e.inspect.map(s=>`<li class="${s.f?'red':'green'}"><i>${s.f?'!':'✓'}</i><span>${esc(s.c)}</span></li>`).join('')}</ul></div>
    <div class="lesson"><small>REMEMBER</small>${esc(e.lesson)}</div><div class="rfoot"><button class="btn" type="button" id="encDone">Continue ▶</button></div></div>`;
-  $('encDone').addEventListener('click',()=>{closeModal();completeTask(t,{o:a.o,insp:meta.insp,ms:meta.ms,act:e.acts.indexOf(a)})});$('encDone').focus({preventScroll:true});
+  $('encDone').addEventListener('click',()=>{closeModal();completeTask(t,{o:a.o,insp:meta.insp,seen:meta.seen,ms:meta.ms,act:e.acts.indexOf(a)})});$('encDone').focus({preventScroll:true});
 }
 function openHub(o){
   const ts=tasksAtObj(o).filter(t=>!t.after||isDone(t.after));const ch=ts[0].enc.ch;
@@ -424,7 +425,9 @@ function showResults(s){
    <div class="saved" id="savedNote">Saving your result…</div><button class="btn wide" type="button" id="resBack">Back to my training</button><button class="btn ghost wide" type="button" id="resReplay" style="margin-top:8px">Replay level</button></div>`,false);
   requestAnimationFrame(()=>{const arc=$('scoreArc');arc.style.transition='stroke-dashoffset 1.2s cubic-bezier(.2,.9,.25,1)';arc.style.strokeDashoffset=C*(1-s.score/100)});
   confettiGo();
-  Promise.resolve(onLevelComplete(lv.id,s)).then(r=>{const el=$('savedNote');if(!el)return;el.textContent=r&&r.saved?'Saved to your training record.':(r&&r.msg)||'Practice run: this result was not saved.';el.classList.toggle('ok',!!(r&&r.saved))});
+  Promise.resolve(onLevelComplete(lv.id,s)).then(r=>{const el=$('savedNote');if(!el)return;
+    if(r&&typeof r.score==='number'&&r.score!==s.score){/* the server's score is the record */s.score=r.score;s.stars=r.stars;const b=modal.querySelector('.res .score b'),arc=$('scoreArc'),st=modal.querySelector('.res .stars');if(b)b.textContent=r.score+'%';if(arc){arc.style.strokeDashoffset=C*(1-r.score/100);arc.setAttribute('stroke',r.score>=70?'#22c55e':'#f59e0b')}if(st)st.innerHTML=starStr(r.stars)}
+    el.textContent=r&&r.saved?'Saved to your training record.':(r&&r.msg)||'Practice run: this result was not saved.';el.classList.toggle('ok',!!(r&&r.saved))});
   $('resBack').addEventListener('click',()=>{closeModal();stopGame()});$('resReplay').addEventListener('click',()=>{closeModal();startLevel(lv.id,G.opts)});
 }
 $('exitBtn').addEventListener('click',()=>{if(!G)return;if(D.open)closeDialog();
@@ -474,10 +477,12 @@ $('sndWave').style.display=A.on?'':'none';
 /* =========================================================
    START / STOP
    ========================================================= */
-let onLevelComplete=()=>({saved:false});
+/* Hooks the portal sets: level start, each decision as it's chosen, and the results screen. */
+let onLevelComplete=()=>({saved:false}),onLevelStart=()=>{},onDecision=()=>{};
 function startLevel(id,opts={}){
   const lv=levelById(id);if(!lv)return;
   G={level:lv,res:{},startAt:Date.now(),paused:false,opts,talked:{},finished:false,room:null,attempt:(opts.attempt||0)};
+  try{onLevelStart(id,opts)}catch(err){console.warn('onLevelStart failed',err)}
   rebuildSolid();
   activeNpcs=npcAll.filter(n=>!n.def.levels||n.def.levels.includes(id));
   for(const n of activeNpcs){const d=n.def;n.place(d.x,d.y,d.dir);n.mode=d.mode||'stand';n.area=d.area||null;n.talking=false;n.wanderT=undefined;n.idleT=undefined}
