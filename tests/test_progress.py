@@ -60,3 +60,19 @@ def test_saved_progress_is_the_clean_copy(employee):
     assert prog["levels"] == {"orientation": {"best": 100, "last": 0, "stars": 0, "done": False, "attempts": 0,
                                               "completedAt": 0, "timeMs": 0, "outcomes": {}}}
     assert prog["lastActive"] > 0
+
+
+def test_unparseable_numbers_count_as_zero(employee):
+    c, _ = employee
+    L = put(c, {"orientation": {"best": "abc", "last": [1], "stars": {"x": 1}, "attempts": "7",
+                                "timeMs": None, "completedAt": "1e5", "done": True}})["levels"]["orientation"]
+    assert (L["best"], L["last"], L["stars"], L["attempts"], L["timeMs"], L["completedAt"]) == (0, 0, 0, 7, 0, 0)
+
+
+def test_non_finite_numbers_count_as_zero(employee):
+    c, _ = employee
+    r = c.put("/api/progress", data='{"levels": {"inbox": {"best": Infinity, "last": NaN}}}',
+              content_type="application/json")
+    assert r.status_code == 200
+    L = r.get_json()["levels"]["inbox"]
+    assert (L["best"], L["last"]) == (0, 0)

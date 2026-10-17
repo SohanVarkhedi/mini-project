@@ -20,7 +20,7 @@ situation they must **inspect, then decide** on. Solo student project, budget �
 **Multi-device is a requirement**: the demo shows the manager portal on one device and the
 employee portal on another at the same time, with the manager's view updating live. The server
 must be reachable on the local network (`python server.py --lan`) and the UI must work on phones,
-tablets and laptops. UI rules: `UI_GUIDE.md` (follow it for every portal screen).
+tablets and laptops. UI rules: `docs/UI_GUIDE.md` (follow it for every portal screen).
 
 ## Run
 
@@ -91,7 +91,7 @@ Score = mean points × 100; stars ≥90 → 3, ≥70 → 2, else 1. Legit scenar
 ## Conventions
 - Game visuals are locked: the **dialog box design** (round portrait, green caps name, page dots,
   green "Next ▶" / "Got it! ✓" pill, typewriter text) and the gold quest language (glow, beam,
-  marker, edge arrow, tracker, minimap dot). Portals follow `UI_GUIDE.md` (tokens, fonts,
+  marker, edge arrow, tracker, minimap dot). Portals follow `docs/UI_GUIDE.md` (tokens, fonts,
   components, motion, layouts). If a UI/design/animation skill is available in the session, use it
   as well; UI_GUIDE.md wins on conflicts.
 - All art and audio are drawn/synthesised in code. Only CC0 assets if any are ever added; log them in ASSETS.md.

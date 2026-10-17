@@ -120,6 +120,15 @@ def put_config():
     return jsonify(data)
 
 
+def clamp_int(value, lo, hi):
+    """int(value) clamped to [lo, hi]; anything that isn't a number counts as 0."""
+    try:
+        n = int(value or 0)
+    except (TypeError, ValueError, OverflowError):
+        n = 0
+    return max(lo, min(hi, n))
+
+
 def clean_progress(levels_in):
     """Keep known levels only, clamp numbers, drop unknown outcomes."""
     clean = {}
@@ -127,7 +136,7 @@ def clean_progress(levels_in):
         if lid not in LEVEL_IDS or not isinstance(L, dict):
             continue
         outs = {str(k)[:20]: v for k, v in (L.get("outcomes") or {}).items() if v in OUTCOMES}
-        num = lambda k, lo, hi, d=0: max(lo, min(hi, int(L.get(k) or d)))
+        num = lambda k, lo, hi: clamp_int(L.get(k), lo, hi)
         clean[lid] = {"best": num("best", 0, 100), "last": num("last", 0, 100), "stars": num("stars", 0, 3),
                       "done": bool(L.get("done")), "attempts": num("attempts", 0, 10000),
                       "completedAt": num("completedAt", 0, 10**14), "timeMs": num("timeMs", 0, 10**9),

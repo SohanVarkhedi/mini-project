@@ -23,6 +23,7 @@ phishverse-local/
 │   └── seed.py          # default manager + --seed-demo sample data
 ├── migrations/          # 0001_initial.sql, 0002_..., applied in order at startup
 ├── tests/               # pytest: API tests + tests/e2e Playwright smoke test
+├── docs/                # UI_GUIDE.md (design rules), ROADMAP_PROMPTS.md (stages)
 ├── requirements.txt     # runtime dependency (Flask)
 ├── requirements-dev.txt # + pytest and Playwright
 └── web/
