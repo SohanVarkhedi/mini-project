@@ -32,10 +32,15 @@ DEVICES = {
 SCREEN_NAMES = ["sign-in", "manager-overview", "employee-journey", "styleguide", "demo-employee"]
 
 
+APP = {}
+
+
 @pytest.fixture(scope="module")
 def seeded_url(tmp_path_factory):
     path = tmp_path_factory.mktemp("visual") / "visual.db"
-    app = create_app({"DB_PATH": str(path), "SECRET_KEY": "visual-secret", "TESTING": True})
+    app = create_app({"DB_PATH": str(path), "SECRET_KEY": "visual-secret", "TESTING": True,
+                      "LAN_URL": "http://192.168.1.23:5000"})  # so the Connect a device panel shows a QR code
+    APP["app"] = app
     conn = db.connect(str(path))
     seed_demo(conn, app.extensions["pv_content"])
     conn.close()
@@ -136,5 +141,76 @@ def test_portal_screen(browser, seeded_url, screen, device, theme):
             small = page.evaluate(TARGET_CHECK, els)
             assert small == [], f"touch targets under 44px: {small}"
         assert errors == []
+    finally:
+        ctx.close()
+
+
+def checks(page, errors, phone):
+    assert page.evaluate(HSCROLL) <= 0, "page scrolls horizontally"
+    page.keyboard.press("Tab")
+    els = page.evaluate_handle(INTERACTIVE)
+    assert page.evaluate(FOCUS_CHECK, els) == []
+    if phone:
+        assert page.evaluate(TARGET_CHECK, els) == []
+    assert errors == []
+
+
+def api_client(email, password):
+    c = APP["app"].test_client()
+    assert c.post("/api/login", json={"email": email, "password": password}).status_code == 200
+    return c
+
+
+@pytest.mark.parametrize("theme", ["light", "dark"])
+def test_live_feed_and_connect_panel(browser, seeded_url, theme):
+    ctx = browser.new_context(color_scheme=theme, **DEVICES["laptop"])
+    ctx.route(re.compile(r"https://fonts\.(googleapis|gstatic)\.com/.*"), fonts_or_empty)
+    page = ctx.new_page()
+    errors = []
+    page.on("pageerror", lambda e: errors.append(str(e)))
+    page.on("console", lambda m: m.type == "error" and "Failed to load resource" not in m.text and errors.append(m.text))
+    try:
+        open_screen(page, seeded_url, "manager-overview")
+        page.wait_for_selector('.topbar-tools [data-live][data-state="connected"]')
+        meera = api_client("meera@novacorp.local", "demo1234")  # a live event arrives while we watch
+        level = "signals" if theme == "light" else "access"
+        sid = meera.post("/api/sessions", json={"level_id": level, "purpose": "practice"}).get_json()["id"]
+        page.wait_for_selector("#feed .feed-item:first-child:has-text('Meera started')")
+        page.wait_for_timeout(400)
+        page.screenshot(path=str(SCREENS / f"live-feed-1440x900-{theme}.png"))
+        checks(page, errors, phone=False)
+        page.click(".topbar-tools [data-connect]")
+        page.wait_for_selector(".connect-qr img")
+        page.wait_for_function("() => document.querySelector('.connect-qr img').complete")
+        page.wait_for_timeout(400)
+        page.screenshot(path=str(SCREENS / f"connect-panel-1440x900-{theme}.png"))
+        assert page.locator(".connect-url .addr").text_content() == "http://192.168.1.23:5000"
+        assert errors == []
+        assert sid
+    finally:
+        ctx.close()
+
+
+@pytest.mark.parametrize("theme", ["light", "dark"])
+def test_nudge_on_phone(browser, seeded_url, theme):
+    ctx = browser.new_context(color_scheme=theme, **DEVICES["phone"])
+    ctx.route(re.compile(r"https://fonts\.(googleapis|gstatic)\.com/.*"), fonts_or_empty)
+    page = ctx.new_page()
+    errors = []
+    page.on("pageerror", lambda e: errors.append(str(e)))
+    page.on("console", lambda m: m.type == "error" and "Failed to load resource" not in m.text and errors.append(m.text))
+    who = "aarav@novacorp.local" if theme == "light" else "rohan@novacorp.local"  # one reminder per person per 10 min
+    try:
+        sign_in(page, seeded_url, who, "demo1234")
+        page.wait_for_selector(".journey")
+        page.wait_for_selector('.e-tools [data-live][data-state="connected"]')
+        mgr = api_client("manager@novacorp.local", "manager123")
+        uid = next(i for i, m in mgr.get("/api/state").get_json()["members"].items() if m["name"].lower().startswith(who[:4]))
+        assert mgr.post("/api/nudges", json={"user_id": uid, "message": "Please finish Calls & Messages by Friday."}).status_code == 201
+        page.wait_for_selector(".toast-item:has-text('Reminder from your manager')", timeout=2000)
+        page.wait_for_selector(".nudge-banner", timeout=2000)
+        page.wait_for_timeout(400)
+        page.screenshot(path=str(SCREENS / f"nudge-390x844-{theme}.png"))
+        checks(page, errors, phone=True)
     finally:
         ctx.close()

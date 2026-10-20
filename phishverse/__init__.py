@@ -10,7 +10,7 @@ import secrets
 
 from flask import Flask, send_from_directory
 
-from . import api, auth, db, seed, sessions
+from . import api, auth, connect, db, events, seed, sessions
 from . import content as content_mod
 
 BASE = db.BASE
@@ -33,7 +33,7 @@ def load_secret():
 
 
 def create_app(config=None):
-    """config may override DB_PATH, SECRET_KEY, TESTING and CONTENT_DIR (or any other Flask setting)."""
+    """config may override DB_PATH, SECRET_KEY, TESTING, CONTENT_DIR, LAN_URL and EVENTS_HEARTBEAT (seconds)."""
     app = Flask(__name__, static_folder=None)
     app.config.update(
         DB_PATH=default_db_path(),
@@ -43,6 +43,7 @@ def create_app(config=None):
         SESSION_COOKIE_SAMESITE="Lax",
         MAX_CONTENT_LENGTH=256 * 1024,
         CONTENT_DIR=content_mod.CONTENT_DIR,
+        LAN_URL=None,  # set by server.py --lan: the address phones use
     )
     app.config.update(config or {})
     if not app.config["SECRET_KEY"]:
@@ -51,9 +52,12 @@ def create_app(config=None):
 
     app.extensions["pv_content"] = content_mod.load(app.config["CONTENT_DIR"])  # raises if content is invalid
     db.init_app(app)
+    events.init_app(app)
     app.register_blueprint(auth.bp)
     app.register_blueprint(api.bp)
     app.register_blueprint(sessions.bp)
+    app.register_blueprint(events.bp)
+    app.register_blueprint(connect.bp)
 
     @app.get("/")
     def index():

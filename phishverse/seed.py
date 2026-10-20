@@ -8,6 +8,7 @@ from werkzeug.security import generate_password_hash
 from .api import default_config
 from .auth import new_user_id
 from .db import now_ms
+from .events import record_event
 from .sessions import new_session_id, refresh_progress
 
 DEFAULT_MANAGER = {
@@ -63,6 +64,9 @@ def record_play(conn, content, user_id, level_id, outcomes, finished_at, purpose
         picked.append(want)
     score, stars = content.score(picked)
     conn.execute("UPDATE play_sessions SET finished_at=?, score=?, stars=? WHERE id=?", (finished_at, score, stars, sid))
+    record_event(conn, user_id, "level_started", {"level_id": level_id, "purpose": purpose, "session_id": sid}, started)
+    record_event(conn, user_id, "level_finished", {"level_id": level_id, "purpose": purpose, "score": score, "stars": stars,
+                                                   "session_id": sid}, finished_at)
     return sid
 
 
@@ -86,6 +90,7 @@ def seed_demo(conn, content):
         ids[email] = uid
         conn.execute("INSERT INTO users (id,name,email,pw_hash,role,dept,joined_at) VALUES (?,?,?,?,?,?,?)",
                      (uid, name, email, generate_password_hash("demo1234"), "employee", dept, t - 10 * day))
+        record_event(conn, uid, "joined", {"dept": dept}, t - 10 * day)
 
     def due(days):
         return time.strftime("%Y-%m-%d", time.localtime((t + days * day) / 1000))
@@ -111,7 +116,11 @@ def seed_demo(conn, content):
     }
     for email, a in assigns.items():
         a.update({"assignedAt": t - 5 * day, "by": "seed"})
+        had = conn.execute("SELECT 1 FROM assignments WHERE user_id=?", (ids[email],)).fetchone()
         conn.execute("INSERT OR REPLACE INTO assignments (user_id,data) VALUES (?,?)", (ids[email], json.dumps(a)))
+        if not had:
+            record_event(conn, ids[email], "assigned", {"levels": a["levels"], "due": a["due"], "note": a["note"], "by": "seed"},
+                         t - 5 * day)
     for email, runs in plays.items():
         for level_id, outcomes, finished_at in runs:
             exists = conn.execute("SELECT 1 FROM play_sessions WHERE user_id=? AND level_id=? AND finished_at IS NOT NULL",

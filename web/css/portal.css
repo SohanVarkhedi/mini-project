@@ -273,3 +273,24 @@
 .setting-row{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:var(--s-3)}
 .setting-row b{display:block;font-weight:700}
 .setting-row small{display:block;color:var(--ink-2);font-size:var(--t-xs)}
+
+/* ---------- live: feed panel, connect panel, nudge banner ---------- */
+.feed-panel .panel-head{margin-bottom:var(--s-3)}
+.feed-panel .feed{max-height:420px;overflow:auto;overscroll-behavior:contain;padding-right:4px}
+.connect-btn .btn-label{display:inline}
+@media (max-width:1279px){.connect-btn .btn-label{display:none}.connect-btn{width:var(--hit);padding:0}}
+@media (max-width:767px){.topbar-tools .connect-btn{display:none}}
+.connect-steps{display:grid;gap:var(--s-3);counter-reset:step}
+.connect-steps li{display:grid;grid-template-columns:28px minmax(0,1fr);gap:var(--s-3);align-items:start;font-size:var(--t-sm)}
+.connect-steps li::before{counter-increment:step;content:counter(step);display:grid;place-items:center;width:28px;height:28px;border-radius:50%;background:var(--surface-2);font-weight:800;font-size:var(--t-xs)}
+.connect-qr{display:grid;justify-items:center;gap:var(--s-2)}
+.connect-qr img{width:min(240px,100%);height:auto;aspect-ratio:1;border-radius:var(--r-md);background:#fff;border:1px solid var(--line)}
+.connect-qr small{font-size:var(--t-xs);color:var(--ink-2)}
+.connect-url{display:flex;flex-wrap:wrap;align-items:center;gap:var(--s-2);font-size:var(--t-md)}
+.nudge-banner{align-items:center}
+.nudge-banner > div{flex:1;min-width:0}
+.nudge-banner q{display:block;margin-top:2px;font-weight:700;quotes:"“" "”"}
+.nudge-banner small{display:block;margin-top:2px;font-size:var(--t-xs);color:var(--ink-2)}
+.nudge-banner .button{flex:none}
+.e-tools .live-indicator{margin-right:var(--s-1)}
+@media (max-width:479px){.e-tools .live-indicator .live-label{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}}

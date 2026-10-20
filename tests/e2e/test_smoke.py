@@ -9,6 +9,7 @@ import pathlib
 import re
 import sqlite3
 import threading
+import time
 
 import pytest
 
@@ -87,6 +88,8 @@ def test_manager_and_employee_on_two_devices(server_url, desktop, phone):
     mgr.fill("#aPw", "manager123")
     mgr.click("#authBtn")
     expect(mgr.locator("#pageTitle")).to_have_text("Overview")
+    expect(mgr.locator('.topbar-tools [data-live]')).to_have_attribute("data-state", "connected")
+    feed = mgr.locator("#feed")
 
     # Employee registers on the phone.
     emp.goto(server_url)
@@ -99,10 +102,10 @@ def test_manager_and_employee_on_two_devices(server_url, desktop, phone):
     expect(emp.locator("#greetH")).to_have_text("Hi Kavya")
     expect(emp.locator("#roleChip")).to_have_text("Employee")
 
-    # Manager sees the new employee and assigns two modules.
-    mgr.reload()
+    # The manager's page (never reloaded) shows the new employee and the join in the feed.
+    expect(feed.locator(".feed-item").first).to_contain_text("Kavya joined the team", timeout=2000)
     pick = mgr.locator("#assignForm label.check", has_text=EMPLOYEE["name"])
-    expect(pick).to_be_visible()
+    expect(pick).to_be_visible(timeout=2000)
     pick.locator("input[data-sel]").check()
     for lid in ("orientation", "inbox"):
         mgr.locator(f'input[data-lv="{lid}"]').check()
@@ -113,15 +116,16 @@ def test_manager_and_employee_on_two_devices(server_url, desktop, phone):
     row = mgr.locator("tr[data-person]", has_text=EMPLOYEE["name"])
     expect(row.locator(".score-chip")).to_have_text(["L1", "L2"])
 
-    # Employee sees the assignment and starts Level 1.
-    emp.reload()
-    expect(emp.locator(".journey .j-step")).to_have_count(2)
+    # The employee's phone (never reloaded) gets a toast and the new journey.
+    expect(emp.locator(".toast-item", has_text="New training assigned")).to_be_visible(timeout=2000)
+    expect(emp.locator(".journey .j-step")).to_have_count(2, timeout=2000)
     start = emp.locator('.journey [data-play="orientation"]')
     expect(start).to_have_text("Start")
     expect(emp.locator(".next-marker")).to_have_count(1)  # one gold marker, on the next step
     start.tap()
     expect(emp.locator("#game")).to_be_visible()
     emp.wait_for_function("() => window.G && window.G.level.id === 'orientation'")
+    expect(feed.locator(".feed-item").first).to_contain_text("Kavya started Office Orientation", timeout=2000)
 
     # Answer each scenario in the encounter UI: inspect one clue, pick the action, continue.
     emp.wait_for_selector("#dlg:not([hidden])")
@@ -134,7 +138,17 @@ def test_manager_and_employee_on_two_devices(server_url, desktop, phone):
         emp.locator("#encDone").tap()
     emp.evaluate("() => { G.res.meet = {o: 'talk'}; G.finished = true; showResults(summary()) }")
     expect(emp.locator("#savedNote")).to_have_text("Saved to your training record.")
+    finished = time.time()
     expect(emp.locator(".res .score b")).to_have_text("90%")
+
+    # Within 2 s, without a reload, the manager's feed and score chip show it.
+    row = mgr.locator("tr[data-person]", has_text=EMPLOYEE["name"])
+    expect(feed.locator(".feed-item").first).to_contain_text("Kavya finished Office Orientation · 90%", timeout=2000)
+    expect(row.locator('.score-chip[data-state="done"]')).to_have_text("L1 · 90%", timeout=2000)
+    feed_lag = time.time() - finished
+    assert feed_lag < 2.0, feed_lag
+    expect(row.locator('[data-col="status"]')).to_contain_text("In progress")
+    expect(mgr.locator(".kpi").nth(1)).to_contain_text("1 of 4 assigned modules")  # Kavya 2 + the manager's own auto plan 2
 
     # The server recorded one session and one decision per scenario, and scored it.
     conn = sqlite3.connect(DB["path"])
@@ -150,11 +164,21 @@ def test_manager_and_employee_on_two_devices(server_url, desktop, phone):
     expect(emp.locator("#portal")).to_be_visible()
     expect(emp.locator('.j-step[data-state="done"]')).to_have_count(1)
 
-    # Manager dashboard shows the score chip.
-    mgr.reload()
-    row = mgr.locator("tr[data-person]", has_text=EMPLOYEE["name"])
-    expect(row.locator('.score-chip[data-state="done"]')).to_have_text("L1 · 90%")
-    expect(row.locator('[data-col="status"]')).to_contain_text("In progress")
+    # The manager sends a reminder from the person's row; it reaches the phone without a reload.
+    row.locator("[data-nudge]").click()
+    mgr.fill(".modal-panel textarea", "Please finish Inbox Defense by Friday.")
+    mgr.click('.modal-panel button[type="submit"]')
+    expect(mgr.locator(".toast-item", has_text="Reminder sent to Kavya")).to_be_visible()
+    sent = time.time()
+    expect(emp.locator(".toast-item", has_text="Reminder from your manager")).to_contain_text("Inbox Defense by Friday", timeout=2000)
+    nudge_lag = time.time() - sent
+    expect(emp.locator(".nudge-banner")).to_contain_text("Please finish Inbox Defense by Friday.")
+    expect(feed.locator(".feed-item").first).to_contain_text("Reminder sent to Kavya")
+    # A second reminder within 10 minutes is refused.
+    row.locator("[data-nudge]").click()
+    mgr.click('.modal-panel button[type="submit"]')
+    expect(mgr.locator(".toast-item", has_text="Reminder not sent")).to_be_visible()
+    print(f"  live lag: finish -> manager feed {feed_lag:.2f}s, nudge -> phone toast {nudge_lag:.2f}s")
 
     assert mgr_errors == []
     assert emp_errors == []

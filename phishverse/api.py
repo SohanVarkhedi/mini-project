@@ -8,6 +8,7 @@ from flask import Blueprint, current_app, jsonify, request
 
 from .auth import err, require_user
 from .db import get_db, now_ms
+from .events import record_event
 
 bp = Blueprint("api", __name__, url_prefix="/api")
 
@@ -95,17 +96,19 @@ def put_assignment(uid):
     data = {"levels": levels, "due": due, "note": str(b.get("note", ""))[:240],
             "assignedAt": now_ms(), "by": u["id"]}
     db.execute("INSERT OR REPLACE INTO assignments (user_id,data) VALUES (?,?)", (uid, json.dumps(data)))
+    record_event(db, uid, "assigned", {"levels": levels, "due": due, "note": data["note"], "by": u["id"]})
     db.commit()
     return jsonify(data)
 
 
 @bp.delete("/assignments/<uid>")
 def delete_assignment(uid):
-    _u, e = require_user("manager")
+    u, e = require_user("manager")
     if e:
         return e
     db = get_db()
-    db.execute("DELETE FROM assignments WHERE user_id=?", (uid,))
+    if db.execute("DELETE FROM assignments WHERE user_id=?", (uid,)).rowcount:
+        record_event(db, uid, "unassigned", {"by": u["id"]})
     db.commit()
     return jsonify({"ok": True})
 

@@ -51,6 +51,9 @@ phishverse/content.py  Loads + validates content/*.json at startup (validate(), 
                      renders web/js/content-data.js. The server never trusts client outcomes or scores.
 phishverse/sessions.py Blueprint: play sessions + decisions, server-side scoring, refresh_progress() (progress row
                      = summary derived from finished sessions; pre-Stage-2 levels without sessions are kept).
+phishverse/events.py record_event(conn, user_id, kind, data): the ONLY way to write the activity log; streams are
+                     woken after the request commits. GET /api/events (SSE), GET /api/activity, POST /api/nudges.
+phishverse/connect.py lan_ip(), GET /api/connect, GET /api/connect/qr.svg (segno; manager only; needs LAN_URL).
 phishverse/seed.py   ensure_defaults() (first manager + config), seed_demo() (records real sessions + decisions via
                      record_play()), set_manager_password().
 content/levels.json  Levels, tasks, scenarios (enc) and the outcome scale. Edit content here, never in JS.
@@ -83,11 +86,13 @@ web/js/engine.js     Actors, level state G, rendering + quest highlights, minima
                      (may return {saved, score, stars}; the results card then shows the server's score).
 web/js/ui.js         UI.* helpers (standalone): UI.toast(), openDrawer(), confirmModal(), renderAddr(text,{flag}),
                      UI.icon(name), UI.avatarHTML(), UI.themeSwitch()/setTheme(). (Plain toast() is the game's.)
-web/js/portal.js     Store + data modes, hash routing, shells, pages, sign-in, boot.
+web/js/live.js       Live.start(lastId)/stop()/on(kind|'*', fn)/onStatus(fn)/simulate(fn) (demo). EventSource with a
+                     40 s watchdog, Last-Event-ID resume, polling fallback (/api/activity?after=) every 10 s.
+web/js/portal.js     Store + data modes, hash routing, shells, pages, sign-in, live feed/nudges/connect panel, boot.
                      Manager: #overview #people #programs #reports #settings #training. Employee: #journey #skills
                      #certificates #profile. Shell renders once per role; only #view re-renders on data refresh.
 ```
-Scripts are **classic scripts sharing globals**, loaded in order core → content-data → content → engine → ui → portal.
+Scripts are **classic scripts sharing globals**, loaded in order core → content-data → content → engine → ui → live → portal.
 Do not introduce a bundler, framework or npm build unless a task explicitly asks for it.
 
 ## Data modes (portal.js `Store.mode`)
@@ -103,10 +108,16 @@ Do not introduce a bundler, framework or npm build unless a task explicitly asks
 `POST /api/sessions/<id>/decisions {task_id, action_index, inspected, response_ms}` → `{outcome}` (from content) ·
 `POST /api/sessions/<id>/finish` → `{score, stars, outcomes, progress}` (needs every scored task; idempotent).
 Sessions are owner-only: anyone else gets 404. Duplicate decision → 409; decision after finish → 409.
+`GET /api/events` (SSE: managers get every event, employees only events about themselves; `ping` heartbeat every
+EVENTS_HEARTBEAT=15 s; resume with Last-Event-ID or ?last_id=) · `GET /api/activity?limit=|after=` ·
+`POST /api/nudges {user_id, message≤140}` (manager; one per person per 10 min → 429) ·
+`GET /api/connect` · `GET /api/connect/qr.svg` (manager). Event kinds today: joined, assigned, unassigned,
+level_started, level_finished (score), nudge_sent. Add new kinds to events.KINDS and record them with record_event.
 Tables (see `migrations/`): `schema_version(version,name,applied_at)`, `users(id,name,email,pw_hash,role manager|employee,dept,joined_at)`, `assignments(user_id,data JSON)`,
 `progress(user_id,data JSON)` (summary cache rebuilt on finish), `config(id=1,data JSON)`,
 `play_sessions(id,user_id,level_id,purpose baseline|practice|test,started_at,finished_at,client_version,score,stars)`,
-`decisions(id,session_id,task_id,action_index,outcome,severity,inspected_json,n_inspections,response_ms,created_at)`.
+`decisions(id,session_id,task_id,action_index,outcome,severity,inspected_json,n_inspections,response_ms,created_at)`,
+`activity(id,user_id,kind,data_json,created_at)` (id = SSE event id).
 Progress per level = finished baseline + practice sessions: best score, last, attempts, outcomes of the best attempt.
 Local mode scores on the server; demo and live modes still score on the device (live writes `progress/<uid>`).
 Mutating `/api/*` requests must be JSON (cheap CSRF guard). Session cookie: HttpOnly, SameSite=Lax.
@@ -171,5 +182,6 @@ page error or console error. Test hooks on `window`: `G` (read-only getter for t
 `showResults(summary())`. Add a test with every new endpoint or rule (auth, role check, validation).
 
 ## Roadmap
-See `docs/ROADMAP_PROMPTS.md` (stages 0–12, run in order). Stages 0 (foundation), 1 (design system) and 2 (content data, decisions, skills) are done. Multi-company (B2B) features from
+See `docs/ROADMAP_PROMPTS.md` (stages 0–12, run in order). Stages 0–3 are done (foundation, design system, content data + decisions, live multi-device sync).
+Multi-device setup and troubleshooting: docs/MULTI_DEVICE.md. Multi-company (B2B) features from
 PRODUCT_SPEC_v1 are deliberately out of scope until after the demo.

@@ -57,15 +57,36 @@
 @keyframes pv-glow{50%{opacity:.45}}
 @media (prefers-reduced-motion:reduce){.next-marker::after{animation:none;opacity:.25}}
 
-/* ---------- live dot ---------- */
-.live-indicator{display:inline-flex;align-items:center;gap:var(--s-2);font-size:var(--t-xs);font-weight:700;color:var(--safe-text);letter-spacing:.04em}
-.live-indicator i{position:relative;width:8px;height:8px;border-radius:50%;background:var(--safe)}
+/* ---------- live dot: connected / reconnecting / offline (icon + text) ---------- */
+.live-indicator{display:inline-flex;align-items:center;gap:var(--s-2);min-height:28px;font-size:var(--t-xs);font-weight:700;color:var(--safe-text);letter-spacing:.02em;white-space:nowrap}
+.live-indicator i{position:relative;width:8px;height:8px;border-radius:50%;background:var(--safe);flex:none}
 .live-indicator i::after{content:"";position:absolute;inset:-4px;border-radius:50%;border:2px solid var(--safe);opacity:0;animation:pv-ping 2000ms var(--ease-out) infinite}
-.live-indicator[data-state="off"]{color:var(--ink-2)}
+.live-indicator .icon{width:15px;height:15px;stroke-width:2.2}
+.live-indicator[data-state="reconnecting"]{color:var(--caution-text)}
+.live-indicator[data-state="reconnecting"] .icon{animation:pv-spin 1200ms linear infinite}
+.live-indicator[data-state="offline"],.live-indicator[data-state="off"]{color:var(--ink-2)}
 .live-indicator[data-state="off"] i{background:var(--ink-2)}
 .live-indicator[data-state="off"] i::after{display:none}
 @keyframes pv-ping{0%{transform:scale(.6);opacity:.7}100%{transform:scale(1.6);opacity:0}}
-@media (prefers-reduced-motion:reduce){.live-indicator i::after{animation:none}}
+@media (prefers-reduced-motion:reduce){.live-indicator i::after,.live-indicator .icon{animation:none!important}}
+
+/* ---------- activity feed (newest first; new items slide in 8 px + fade, 200 ms) ---------- */
+.feed{display:grid}
+.feed-item{display:grid;grid-template-columns:30px minmax(0,1fr);gap:var(--s-3);align-items:start;padding:var(--s-3) 0;border-top:1px solid var(--line);
+  transition:opacity 200ms ease,transform 200ms var(--ease-out)}
+.feed-item:first-child{border-top:0;padding-top:0}
+@starting-style{.feed-item[data-new]{opacity:0;transform:translateY(-8px)}}
+@media (prefers-reduced-motion:reduce){@starting-style{.feed-item[data-new]{transform:none}}}
+.feed-icon{display:grid;place-items:center;width:30px;height:30px;border-radius:50%;background:var(--surface-2);color:var(--ink-2)}
+.feed-icon .icon{width:16px;height:16px}
+.feed-icon[data-tone="safe"]{background:var(--safe-soft);color:var(--safe-text)}
+.feed-icon[data-tone="caution"]{background:var(--caution-soft);color:var(--caution-text)}
+.feed-icon[data-tone="danger"]{background:var(--danger-soft);color:var(--danger-text)}
+.feed-icon[data-tone="info"]{background:var(--info-soft);color:var(--info-text)}
+.feed-item p{font-size:var(--t-sm);line-height:1.4;min-width:0;overflow-wrap:anywhere}
+.feed-item p b{font-weight:700}
+.feed-item time{display:block;font-size:var(--t-xs);color:var(--ink-2);margin-top:2px}
+.feed-item q{display:block;margin-top:4px;font-size:var(--t-xs);color:var(--ink-2);quotes:"“" "”"}
 
 /* ---------- status pill (icon + label, never colour alone) ---------- */
 .status-pill{
@@ -90,6 +111,10 @@
 .score-chip .icon{width:13px;height:13px;stroke-width:2.6}
 .score-chip[data-state="done"]{border-color:transparent;background:var(--safe-soft);color:var(--safe-text)}
 .score-chip[data-state="bad"]{border-color:transparent;background:var(--danger-soft);color:var(--danger-text)}
+/* a chip that just changed live: a ring that fades out */
+.score-chip{position:relative}
+.score-chip[data-fresh]::after{content:"";position:absolute;inset:-3px;border-radius:8px;box-shadow:0 0 0 2px var(--info);opacity:0;transition:opacity 1800ms ease}
+@starting-style{.score-chip[data-fresh]::after{opacity:1}}
 
 /* ---------- avatar (initials; hue from the name, lightness from the theme tokens) ---------- */
 .avatar{

@@ -6,6 +6,7 @@ from flask import Blueprint, jsonify, request, session
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from .db import get_db, now_ms
+from .events import record_event
 
 bp = Blueprint("auth", __name__, url_prefix="/api")
 
@@ -83,6 +84,7 @@ def register():
     uid = new_user_id()
     db.execute("INSERT INTO users (id,name,email,pw_hash,role,dept,joined_at) VALUES (?,?,?,?,?,?,?)",
                (uid, name, email, generate_password_hash(pw), "employee", dept, now_ms()))
+    record_event(db, uid, "joined", {"dept": dept})
     db.commit()
     start_session(uid)
     return jsonify(user_json(db.execute("SELECT * FROM users WHERE id=?", (uid,)).fetchone()))

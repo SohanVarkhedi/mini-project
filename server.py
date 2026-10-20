@@ -11,27 +11,10 @@ this file is the command line.
   python server.py --host 0.0.0.0   # same binding as --lan, without the LAN URL
 """
 import argparse
-import socket
 
 from phishverse import create_app, db
+from phishverse.connect import lan_ip
 from phishverse.seed import seed_demo, set_manager_password
-
-
-def lan_ip():
-    """The IP other devices on this network can reach us at, or None.
-
-    Connecting a UDP socket sends no packets; it only asks the OS which local
-    address it would route from. 192.0.2.1 is a reserved documentation address.
-    """
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    try:
-        s.connect(("192.0.2.1", 80))
-        ip = s.getsockname()[0]
-    except OSError:
-        return None
-    finally:
-        s.close()
-    return None if ip.startswith("127.") or ip == "0.0.0.0" else ip
 
 
 def main():
@@ -58,8 +41,10 @@ def main():
         conn.close()
 
     host = "0.0.0.0" if args.lan else args.host
+    ip = lan_ip() if host == "0.0.0.0" else None
+    if ip:
+        app.config["LAN_URL"] = f"http://{ip}:{args.port}"  # shown in the manager's Connect a device panel
     if args.lan:
-        ip = lan_ip()
         print("  PhishVerse is running  (Ctrl+C to stop)")
         print(f"    On this computer:           http://localhost:{args.port}")
         if ip:

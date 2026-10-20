@@ -50,6 +50,11 @@ const UI=(()=>{
     printer:'<path d="M7 9V3.5h10V9"/><rect x="3" y="9" width="18" height="8" rx="2"/><path d="M7 14h10v6.5H7z"/>',
     door:'<path d="M5 21V3.5h11V21M3 21h18"/><path d="M16 5.5 20 4v17"/><circle cx="12.5" cy="12.5" r=".8"/>',
     rupee:'<path d="M7 4h11M7 8.5h11M7 4h3.5a4.5 4.5 0 0 1 0 9H7l8.5 7.5"/>',
+    bell:'<path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/>',
+    qr:'<rect x="3.5" y="3.5" width="6" height="6" rx="1"/><rect x="14.5" y="3.5" width="6" height="6" rx="1"/><rect x="3.5" y="14.5" width="6" height="6" rx="1"/><path d="M14.5 14.5h2.5v2.5M20.5 14.5v6h-6M17 20.5v-1"/>',
+    copy:'<rect x="8.5" y="8.5" width="12" height="12" rx="2"/><path d="M15.5 8.5V5.5a2 2 0 0 0-2-2h-8a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h3"/>',
+    wifiOff:'<path d="M3 3l18 18"/><path d="M8.5 16.5a5 5 0 0 1 7 0M5 12.5a10 10 0 0 1 4.5-2.4M14.5 10.1A10 10 0 0 1 19 12.5M2 9a15 15 0 0 1 4.6-2.7M12 4.5a15 15 0 0 1 10 4.5"/><circle cx="12" cy="20" r=".8"/>',
+    refresh:'<path d="M20 11a8 8 0 0 0-14.5-4.5L4 8M4 4v4h4"/><path d="M4 13a8 8 0 0 0 14.5 4.5L20 16M20 20v-4h-4"/>',
   };
   const icon=(name,cls='')=>`<svg class="icon ${cls}" viewBox="0 0 24 24" aria-hidden="true" focusable="false">${P[name]||P.circle}</svg>`;
   const mark=(lg)=>`<span class="mark${lg?' mark--lg':''}" aria-hidden="true"><svg viewBox="0 0 46 52" fill="none"><path d="M23 3 41 9.5v14.2c0 11.4-7.4 20-18 24.8C12.4 43.7 5 35.1 5 23.7V9.5L23 3Z" fill="currentColor"/><path class="mark-check" d="M14.5 26.5l6 6L32 20.5" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>`;
@@ -129,6 +134,25 @@ const UI=(()=>{
     });
   }
 
+  /* form modal: a confirmation with one text field (e.g. an optional reminder message).
+     Resolves the trimmed text, or null when cancelled. */
+  function formModal({title,body='',label,placeholder='',maxlength=140,confirm='Send',cancel='Cancel'}={}){
+    return new Promise(resolve=>{
+      const ret=document.activeElement,l=layer();
+      const scrim=document.createElement('div');scrim.className='scrim';
+      const m=document.createElement('div');m.className='modal-panel';m.setAttribute('role','dialog');m.setAttribute('aria-modal','true');
+      const hid='fm'+Math.random().toString(36).slice(2,8);m.setAttribute('aria-labelledby',hid);
+      m.innerHTML=`<h2 id="${hid}">${escH(title)}</h2>${body?`<p>${escH(body)}</p>`:''}<form novalidate style="display:grid;gap:12px;margin-top:16px"><div class="field"><label class="field-label" for="${hid}f">${escH(label)} <small>(optional)</small></label><textarea class="input" id="${hid}f" maxlength="${maxlength}" placeholder="${escH(placeholder)}" aria-describedby="${hid}c"></textarea><span class="field-hint" id="${hid}c" aria-live="polite">0 / ${maxlength}</span></div><div class="modal-actions" style="margin-top:4px"><button type="button" class="button button--secondary" data-v="0">${escH(cancel)}</button><button type="submit" class="button button--primary">${escH(confirm)}</button></div></form>`;
+      l.append(scrim,m);let done=false;const ta=m.querySelector('textarea'),cnt=m.querySelector('.field-hint');
+      ta.addEventListener('input',()=>{cnt.textContent=`${ta.value.length} / ${maxlength}`});
+      const api={panel:m,dismiss:()=>finish(null)};stack.push(api);
+      function finish(v){if(done)return;done=true;const i=stack.indexOf(api);if(i>=0)stack.splice(i,1);scrim.removeAttribute('data-open');setTimeout(()=>scrim.remove(),reduced()?0:160);closeAnim(m,140).then(()=>{ret&&ret.focus&&ret.focus({preventScroll:true})});resolve(v)}
+      m.querySelector('form').addEventListener('submit',e=>{e.preventDefault();finish(ta.value.trim())});
+      m.querySelector('[data-v="0"]').addEventListener('click',()=>finish(null));scrim.addEventListener('click',()=>finish(null));
+      open(scrim);open(m);setTimeout(()=>ta.focus({preventScroll:true}),40);
+    });
+  }
+
   /* toast: one region (bottom-right on desktop, top on phones), stacks, pauses when the tab is
      hidden or hovered, dismiss with ✕, Escape, or a sideways swipe. */
   let toaster=null;const toasts=[];
@@ -164,6 +188,6 @@ const UI=(()=>{
   function themeSwitch(extra=''){const cur=getTheme();return`<div class="segmented segmented--icons theme-switch ${extra}" role="group" aria-label="Theme">${[['system','System theme'],['light','Light theme'],['dark','Dark theme']].map(([k,l])=>`<button type="button" data-theme-set="${k}" aria-pressed="${cur===k}" aria-label="${l}" title="${l}">${icon({system:'system',light:'sun',dark:'moon'}[k])}</button>`).join('')}</div>`}
   document.addEventListener('click',e=>{const b=e.target.closest('[data-theme-set]');if(b)setTheme(b.dataset.themeSet)});
 
-  return{esc:escH,icon,mark,avatarHTML,initials,renderAddr,openDrawer,confirmModal,toast,getTheme,setTheme,themeSwitch,reduced};
+  return{esc:escH,icon,mark,avatarHTML,initials,renderAddr,openDrawer,confirmModal,formModal,toast,getTheme,setTheme,themeSwitch,reduced};
 })();
 const{toast:uiToast,openDrawer,confirmModal,renderAddr}=UI;

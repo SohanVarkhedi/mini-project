@@ -11,7 +11,8 @@ PASSWORD = "password123"
 
 @pytest.fixture
 def app(tmp_path):
-    return create_app({"DB_PATH": str(tmp_path / "test.db"), "SECRET_KEY": "test-secret", "TESTING": True})
+    return create_app({"DB_PATH": str(tmp_path / "test.db"), "SECRET_KEY": "test-secret", "TESTING": True,
+                       "EVENTS_HEARTBEAT": 0.2})
 
 
 @pytest.fixture

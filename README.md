@@ -22,12 +22,14 @@ phishverse-local/
 │   ├── api.py           # state, assignments, config, progress
 │   ├── content.py       # loads and validates content/*.json, scoring
 │   ├── sessions.py      # play sessions and decisions (server-side scoring)
+│   ├── events.py        # activity log, live updates (Server-Sent Events), reminders
+│   ├── connect.py       # LAN address + QR code for the Connect a device panel
 │   └── seed.py          # default manager + --seed-demo sample data
 ├── migrations/          # 0001_initial.sql, 0002_..., applied in order at startup
 ├── content/             # levels.json (scenarios), skills.json, world_refs.json (generated)
 ├── scripts/             # build_content.py, validate_content.py, gen_world_refs.py
 ├── tests/               # pytest: API tests + tests/e2e Playwright smoke test
-├── docs/                # UI_GUIDE.md (design rules), ROADMAP_PROMPTS.md (stages)
+├── docs/                # UI_GUIDE.md, MULTI_DEVICE.md (laptop + phone setup), ROADMAP_PROMPTS.md
 ├── requirements.txt     # runtime dependency (Flask)
 ├── requirements-dev.txt # + pytest and Playwright
 └── web/
@@ -45,6 +47,7 @@ phishverse-local/
         ├── content.js   # NPCs and object placement
         ├── engine.js    # movement, rendering, highlights, dialog, encounters, audio
         ├── ui.js        # design-system helpers: toast, drawer, confirm, inspected text, theme
+        ├── live.js      # live updates: EventSource with reconnect and a polling fallback
         └── portal.js    # manager/employee portal + data layer
 ```
 
@@ -110,18 +113,21 @@ Or pick the manager login before the first run with environment variables
 2. In a **private/incognito window** (or on your phone, see `--lan` below),
    open http://localhost:5000, choose
    **Create account** and register an employee.
-3. Back in the manager window, refresh. Under **Assign training**, tick the
-   new employee, pick modules and a due date, then click **Assign**.
-4. In the employee window, refresh and click **Start** on Level 1.
+3. Back in the manager window (no need to refresh: new people appear live),
+   under **Assign training**, tick the new employee, pick modules and a due date, then click **Assign**.
+4. The employee window shows **New training assigned** straight away. Click
+   **Start** on Level 1.
 5. Finish the level, talk to Ada, and the server scores it. Every decision is
-   recorded, including which clues you inspected first. The manager's
-   dashboard shows it within about 10 seconds, or immediately after a refresh.
+   recorded, including which clues you inspected first. The manager's window
+   shows it in **Live activity** within a second or two, without a refresh.
 
 ## Use it from your phone (same Wi-Fi)
 
 ```bash
 python server.py --lan
 ```
+
+Full guide, including firewall prompts, campus Wi-Fi and tunnels: [docs/MULTI_DEVICE.md](docs/MULTI_DEVICE.md).
 
 The server prints two addresses:
 
@@ -131,9 +137,12 @@ The server prints two addresses:
     On your phone (same Wi-Fi): http://192.168.1.23:5000
 ```
 
-Open the second one on any phone, tablet or laptop on the same network. The
-manager can keep the dashboard open on the laptop while an employee plays on
-a phone. If the phone can't connect:
+Open the second one on any phone, tablet or laptop on the same network, or
+click **Connect a device** in the manager's top bar and scan the QR code. The
+manager's dashboard updates live while an employee plays on a phone: the
+**Live activity** feed, the scores and the counts change within a second or two,
+without refreshing. Managers can send a reminder from a person's row (the bell);
+it pops up on the employee's device. If the phone can't connect:
 
 - Windows asks to allow Python through the firewall the first time. Allow it
   on **private** networks. If you missed the prompt, allow `python.exe` in

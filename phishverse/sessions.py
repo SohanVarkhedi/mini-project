@@ -11,6 +11,7 @@ from flask import Blueprint, current_app, jsonify, request
 
 from .auth import err, require_user
 from .db import get_db, now_ms
+from .events import record_event
 
 bp = Blueprint("sessions", __name__, url_prefix="/api")
 
@@ -118,6 +119,7 @@ def start_session():
     db = get_db()
     db.execute("INSERT INTO play_sessions (id,user_id,level_id,purpose,started_at,client_version) VALUES (?,?,?,?,?,?)",
                (s["id"], u["id"], level_id, purpose, s["started_at"], str(b.get("client_version", ""))[:40]))
+    record_event(db, u["id"], "level_started", {"level_id": level_id, "purpose": purpose, "session_id": s["id"]}, s["started_at"])
     db.commit()
     return jsonify(s), 201
 
@@ -183,8 +185,11 @@ def finish_session(sid):
         if missing:
             return jsonify({"error": "Finish every scenario before ending the level.", "missing": missing}), 400
         score, stars = content().score([got[t["id"]] for t in tasks])
-        db.execute("UPDATE play_sessions SET finished_at=?, score=?, stars=? WHERE id=?", (now_ms(), score, stars, sid))
+        done_at = now_ms()
+        db.execute("UPDATE play_sessions SET finished_at=?, score=?, stars=? WHERE id=?", (done_at, score, stars, sid))
         progress = refresh_progress(db, u["id"])
+        record_event(db, u["id"], "level_finished", {"level_id": s["level_id"], "purpose": s["purpose"], "score": score,
+                                                     "stars": stars, "session_id": sid}, done_at)
         db.commit()
         s = own_session(u, sid)
     else:  # finishing twice (e.g. a retried request) just returns the result again

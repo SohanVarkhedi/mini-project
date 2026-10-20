@@ -4,7 +4,7 @@
    ========================================================= */
 const BADGE={orientation:'Sharp Eye',inbox:'Inbox Guardian',signals:'Signal Keeper',access:'Gatekeeper',executive:'Fraud Buster'};
 const Store={ready:false,mode:'demo',me:{id:'me',name:'',avatar:''},isMgr:true,canWrite:true,db:null,user:null,
-  members:{},assignments:{},progress:{},config:{defaultLevels:[],defaultDueDays:14},myMember:null,myAssign:null,myProg:null,profiles:{}};
+  members:{},assignments:{},progress:{},config:{defaultLevels:[],defaultDueDays:14},myMember:null,myAssign:null,myProg:null,profiles:{},activity:[]};
 const draft={sel:new Set(),levels:new Set(['orientation','inbox']),due:'',note:'',defLevels:null,defDays:null,joinName:'',joinDept:'',search:''};
 const dayMs=864e5,todayISO=()=>new Date().toISOString().slice(0,10);
 const addDaysISO=(ms,d)=>new Date(ms+d*dayMs).toISOString().slice(0,10);
@@ -45,7 +45,7 @@ function initDemo(){
     a2:{levels:{orientation:mk(100,{usb:'safe',qr:'safe',sticky:'safe',laptop:'safe'})},lastActive:now-4*dayMs},
     a3:{levels:{orientation:mk(55,{usb:'compromise',qr:'compromise',sticky:'safe',laptop:'acceptable'}),inbox:mk(93,{e1:'safe',e2:'safe',e3:'safe',e4:'safe',e5:'safe',e6:'acceptable'})},lastActive:now-8*3600e3}};
   Store.config={defaultLevels:['orientation','inbox'],defaultDueDays:14};
-  syncMine();Store.ready=true;renderPortal();
+  syncMine();Store.ready=true;startDemoLive();renderPortal();
 }
 function syncMine(){const id=Store.me.id;if(Store.mode==='demo'){Store.myMember=Store.members[id]||null;Store.myAssign=Store.assignments[id]||null;Store.myProg=Store.progress[id]||null}}
 
@@ -85,21 +85,22 @@ async function initLocal(){
   if(location.protocol==='file:')return false;
   try{await API('health')}catch(e){return false}
   Store.mode='local';Store.canWrite=true;Store.authed=false;
-  try{setLocalMe(await API('me'));await loadLocalState()}catch(e){Store.authed=false}
+  try{setLocalMe(await API('me'));await loadLocalState();startLive()}catch(e){Store.authed=false}
   Store.ready=true;renderPortal();
-  setInterval(()=>{if(Store.authed&&$('game').hidden&&!document.hidden)loadLocalState().catch(()=>{})},10000);
+  /* safety net only: live events normally refresh the state straight away */
+  setInterval(()=>{if(Store.authed&&Live.status!=='connected'&&$('game').hidden&&!document.hidden)loadLocalState().catch(()=>{})},10000);
   return true;
 }
 function setLocalMe(me){Store.authed=true;Store.me={id:me.id,name:me.name,avatar:'',email:me.email,dept:me.dept};Store.isMgr=me.role==='manager'}
 async function loadLocalState(){const s=await API('state');Store.config=Object.assign({defaultLevels:[],defaultDueDays:14},s.config||{});
-  if(Store.isMgr){Store.members=s.members||{};Store.assignments=s.assignments||{};Store.progress=s.progress||{}}
+  if(Store.isMgr){markFreshChips(Store.progress,s.progress||{});Store.members=s.members||{};Store.assignments=s.assignments||{};Store.progress=s.progress||{}}
   Store.myMember=s.myMember||null;Store.myAssign=s.myAssign||null;Store.myProg=s.myProg||null;scheduleRender()}
 async function writeLocal(path,data){const[c,id]=path.split('/');
   try{if(c==='assignments')await API('assignments/'+encodeURIComponent(id),data===null?{method:'DELETE'}:{method:'PUT',body:JSON.stringify(data)});
     else if(c==='config')await API('config',{method:'PUT',body:JSON.stringify(data)});
     else if(c==='members')await API('profile',{method:'PUT',body:JSON.stringify(data)});
     loadLocalState().catch(()=>{});return true}catch(e){return e.status===403?'invalid_argument':'error'}}
-async function logoutLocal(){try{await API('logout',{method:'POST',body:'{}'})}catch(e){}Store.authed=false;Store.members={};Store.assignments={};Store.progress={};Store.myMember=Store.myAssign=Store.myProg=null;Store.me={id:'',name:'',avatar:''};
+async function logoutLocal(){Live.stop();Store.activity=[];feedList=null;try{await API('logout',{method:'POST',body:'{}'})}catch(e){}Store.authed=false;Store.members={};Store.assignments={};Store.progress={};Store.myMember=Store.myAssign=Store.myProg=null;Store.me={id:'',name:'',avatar:''};
   if(location.hash)history.replaceState(null,'',location.pathname+location.search);renderPortal()}
 /* ---------- recording a play (local mode: the server records and scores every decision) ---------- */
 const CLIENT_VERSION='pv-web-2';
@@ -143,6 +144,104 @@ onLevelComplete=(lid,s)=>{
 };
 window.onGameExit=()=>renderPortal();
 
+
+/* =========================================================
+   LIVE: activity feed, live dot, nudges, connect a device (see js/live.js)
+   ========================================================= */
+let freshChips=new Set(),feedList=null,refreshTimer=0;
+function markFreshChips(before,after){
+  freshChips=new Set();if(!before||!Object.keys(before).length)return;
+  for(const[uid,p]of Object.entries(after||{}))for(const[lid,L]of Object.entries(p.levels||{})){const o=before[uid]&&before[uid].levels&&before[uid].levels[lid];if(!o||o.best!==L.best||o.attempts!==L.attempts)freshChips.add(uid+'/'+lid)}
+}
+async function startLive(){
+  if(Store.mode!=='local'||!Store.authed)return;
+  let latest=0;try{const j=await API('activity?limit=30');Store.activity=j.events||[];latest=j.latest_id||0}catch(e){}
+  feedList=null;Live.start(latest);scheduleRender();
+}
+function startDemoLive(){
+  feedList=null;const now=Date.now(),ids=['a1','a2','a3','a4'];
+  Store.activity=[{id:-3,kind:'level_finished',user_id:'a3',name:'Rohan Das',data:{level_id:'inbox',score:93},created_at:now-8*3600e3},
+    {id:-2,kind:'level_finished',user_id:'a1',name:'Aarav Mehta',data:{level_id:'inbox',score:73},created_at:now-3600e3},
+    {id:-1,kind:'level_started',user_id:'a4',name:'Meera Iyer',data:{level_id:'orientation'},created_at:now-5*60e3}].reverse();/* newest first */
+  const script=[['level_started','a2',{level_id:'inbox'}],['level_finished','a4',{level_id:'orientation',score:85}],['nudge_sent','me',{message:'Please finish Office Orientation this week.',by_name:'Team Manager'}],
+    ['level_started','a3',{level_id:'signals'}],['assigned','me',{levels:['orientation','inbox'],due:addDaysISO(now,14)}],['level_finished','a2',{level_id:'inbox',score:77}]];
+  Live.simulate(i=>{const[kind,uid,data]=script[i%script.length];const m=Store.members[uid]||{name:'Someone'};return{id:i+1,kind,user_id:uid,name:m.name,data,created_at:Date.now()}},6000);
+}
+Live.on('*',ev=>{
+  Store.activity.unshift(ev);Store.activity.length=Math.min(Store.activity.length,40);
+  if(feedList)prependFeedItem(ev);
+  const mine=ev.user_id===Store.me.id;
+  if(!Store.isMgr&&mine){
+    if(ev.kind==='assigned'){const n=(ev.data.levels||[]).length;UI.toast('New training assigned',{description:`${n} ${plural(n,'module')}${ev.data.due?`, due ${fmtDate(ev.data.due)}`:''}. It's on your journey now.`})}
+    else if(ev.kind==='unassigned')UI.toast('Your training plan changed',{type:'info',description:'Your manager removed your assigned modules.'});
+    else if(ev.kind==='nudge_sent')UI.toast('Reminder from your manager',{type:'info',description:ev.data.message||'Please finish your assigned training.',duration:8000});
+  }
+  if(Store.mode==='local'){clearTimeout(refreshTimer);refreshTimer=setTimeout(()=>loadLocalState().catch(()=>{}),60)}
+  else if(Store.mode==='demo'&&ev.kind==='nudge_sent'&&!Store.isMgr)scheduleRender();
+});
+const LIVE_TEXT={connected:['Live',''],reconnecting:['Reconnecting…','refresh'],offline:['Offline','wifiOff']};
+Live.onStatus(()=>updateLiveIndicators());
+function liveIndicator(){return Store.mode==='live'?'':`<span class="live-indicator" data-live role="status" aria-live="polite"></span>`}
+function updateLiveIndicators(){
+  const st=Live.status,[label,ic]=LIVE_TEXT[st]||LIVE_TEXT.offline,demo=Live.mode==='demo',poll=Live.mode==='poll';
+  document.querySelectorAll('[data-live]').forEach(el=>{el.dataset.state=st;el.innerHTML=`${ic?icon(ic):'<i aria-hidden="true"></i>'}<span class="live-label">${label}${demo?' (demo)':''}</span>`;
+    el.title=st==='connected'?(demo?'Sample events every few seconds':poll?'Updating every 10 seconds':'Updates appear as they happen'):st==='reconnecting'?'Trying to reconnect':'Not connected. Check the server is running.'});
+}
+const firstName=n=>String(n||'Someone').split(' ')[0];
+const lvTitle=id=>{const l=levelById(id);return l?l.title:id};
+function feedSentence(ev){
+  const who=`<b>${esc(firstName(ev.name))}</b>`,d=ev.data||{};
+  switch(ev.kind){
+    case'joined':return['users','info',`${who} joined the team`];
+    case'assigned':{const n=(d.levels||[]).length;return['journey','',`${who} was assigned ${n} ${plural(n,'module')}${d.due?` · due ${fmtDate(d.due)}`:''}`]}
+    case'unassigned':return['close','',`${who}'s training plan was removed`];
+    case'level_started':return['play','info',`${who} started ${esc(lvTitle(d.level_id))}${d.purpose==='practice'?' (practice)':''}`];
+    case'level_finished':return[d.score>=70?'check':'alert',d.score>=70?'safe':'caution',`${who} finished ${esc(lvTitle(d.level_id))} · <span class="num">${d.score}%</span>`];
+    case'nudge_sent':return['bell','',Store.isMgr?`Reminder sent to ${who}`:`Your manager sent you a reminder`];
+  }
+  return['circle','',`${who}: ${esc(ev.kind)}`];
+}
+function feedItem(ev,isNew){
+  const[ic,tone,html]=feedSentence(ev),li=document.createElement('li');li.className='feed-item';li.dataset.id=ev.id;if(isNew)li.setAttribute('data-new','');
+  li.innerHTML=`<span class="feed-icon"${tone?` data-tone="${tone}"`:''}>${icon(ic)}</span><div><p>${html}</p>${ev.kind==='nudge_sent'&&ev.data.message?`<q>${esc(ev.data.message)}</q>`:''}<time datetime="${new Date(ev.created_at).toISOString()}" data-at="${ev.created_at}">${ago(ev.created_at)}</time></div>`;return li;
+}
+function getFeedList(){
+  if(!feedList){feedList=document.createElement('ol');feedList.className='feed';feedList.id='feed';feedList.setAttribute('aria-live','polite');feedList.setAttribute('aria-label','Live activity, newest first');Store.activity.slice(0,30).forEach(ev=>feedList.append(feedItem(ev,false)))}
+  refreshFeedTimes();if(!feedList.children.length)feedList.innerHTML=`<li class="feed-empty">${emptyState('reports','No activity yet','Joins, assignments and finished levels appear here as they happen.','',true)}</li>`;return feedList;
+}
+function prependFeedItem(ev){const e=feedList.querySelector('.feed-empty');if(e)e.remove();feedList.prepend(feedItem(ev,true));while(feedList.children.length>30)feedList.lastChild.remove()}
+function refreshFeedTimes(){if(feedList)feedList.querySelectorAll('time[data-at]').forEach(t=>{t.textContent=ago(+t.dataset.at)})}
+setInterval(refreshFeedTimes,30000);
+function feedPanel(){if(Store.mode==='live')return'';return`<section class="panel feed-panel" aria-labelledby="feedH"><div class="panel-head"><div><h2 id="feedH">Live activity</h2><p>Updates the moment someone plays, on any device.</p></div></div><div data-feed-slot></div></section>`}
+const canNudge=id=>(Store.mode==='local'||Store.mode==='demo')&&id!==Store.me.id;
+async function nudgePerson(id){
+  const m=Store.members[id],name=firstName(m&&m.name);
+  const msg=await UI.formModal({title:`Send ${name} a reminder`,body:`${name} sees it on their device straight away.`,label:'Message',placeholder:'For example: please finish Inbox Defense by Friday.',maxlength:140,confirm:'Send reminder'});
+  if(msg===null)return;
+  if(Store.mode==='demo'){UI.toast(`Reminder sent to ${name}`,{description:'Demo mode: nothing was sent.'});return}
+  try{await API('nudges',{method:'POST',body:JSON.stringify({user_id:id,message:msg})});UI.toast(`Reminder sent to ${name}`,{description:msg?`“${msg}”`:`${name} will see it straight away.`})}
+  catch(e){UI.toast(e.status===429?'Reminder not sent':'Could not send the reminder',{type:'error',description:e.status===429?e.message:'Check your connection and try again.'})}
+}
+function nudgeBanner(){
+  let seen=0;try{seen=+localStorage.getItem('pv-nudge-seen')||0}catch(e){}
+  const n=Store.activity.find(ev=>ev.kind==='nudge_sent'&&ev.user_id===Store.me.id);
+  if(!n||n.id===seen||Date.now()-n.created_at>7*dayMs)return'';
+  return`<div class="banner nudge-banner" data-tone="caution" role="status">${icon('bell')}<div><b>Reminder from ${esc(n.data.by_name||'your manager')}</b><q>${esc(n.data.message||'Please finish your assigned training.')}</q><small>${ago(n.created_at)}</small></div><button type="button" class="button button--quiet button--sm" data-dismiss-nudge="${n.id}">Dismiss</button></div>`;
+}
+async function openConnect(){
+  const d=openDrawer({title:'Connect a device',body:'<span class="skeleton skeleton--block" style="--h:240px"></span><span class="skeleton skeleton--text"></span>'});
+  let info=null;try{info=await API('connect')}catch(e){}
+  if(!info){d.body.innerHTML=emptyState('wifiOff','Could not reach the server','Check the server is still running, then try again.','',true);return}
+  if(!info.lan){d.body.innerHTML=`<div class="banner" data-tone="caution">${icon('alert')}<div><b>Phones can't reach this server yet.</b> It's only listening on this computer.</div></div>
+    <div class="drawer-section"><span class="label">To connect a phone or tablet</span><ol class="connect-steps"><li><span>Stop the server (Ctrl+C in its window).</span></li><li><span>Start it again with <code>python server.py --lan</code></span></li><li><span>Reopen this panel. It will show an address and a QR code for your phone.</span></li></ol></div>
+    <p class="muted" style="font-size:var(--t-sm)">Firewall prompts, hotspots and campus Wi-Fi: see <code>docs/MULTI_DEVICE.md</code>.</p>`;return}
+  d.body.innerHTML=`<div class="connect-qr"><img src="api/connect/qr.svg" alt="QR code for ${esc(info.url)}" width="240" height="240"><small>Scan with the phone's camera</small></div>
+    <div class="drawer-section"><span class="label">Or type this address</span><div class="connect-url">${UI.renderAddr(info.url)}<button type="button" class="button button--secondary button--sm" data-copy-url>${icon('copy','icon--sm')}Copy</button></div></div>
+    <div class="drawer-section"><span class="label">Steps</span><ol class="connect-steps"><li><span>Join the same Wi-Fi as this computer.</span></li><li><span>Scan the code, or open the address in the phone's browser.</span></li><li><span>Sign in, or choose <b>Create account</b>. This dashboard updates as they play.</span></li></ol></div>
+    <p class="muted" style="font-size:var(--t-sm)">Page doesn't open on the phone? Allow Python through the firewall on private networks, or use a phone hotspot. See <code>docs/MULTI_DEVICE.md</code>.</p>`;
+  d.body.querySelector('[data-copy-url]').addEventListener('click',async()=>{try{await navigator.clipboard.writeText(info.url);UI.toast('Address copied',{description:info.url})}catch(e){UI.toast('Copy this address',{type:'info',description:info.url})}});
+}
+
 /* =========================================================
    ROUTING + SHELLS
    ========================================================= */
@@ -171,7 +270,7 @@ function mgrShell(){
       <button type="button" class="button button--quiet button--icon menu-btn" id="menuBtn" aria-expanded="false" aria-controls="topMenu" aria-label="Open menu">${icon('menu')}</button>
       <h1 class="page-title" id="pageTitle">Overview</h1>
       <div class="topbar-tools">
-        ${Store.mode==='local'?'<span class="live-indicator" title="Updates every 10 seconds"><i></i>Live</span>':''}
+        ${liveIndicator()}${Store.mode==='local'?`<button type="button" class="button button--secondary button--sm connect-btn" data-connect aria-label="Connect a device" title="Connect a device">${icon('qr','icon--sm')}<span class="btn-label">Connect a device</span></button>`:''}
         ${demoSwitch()}${UI.themeSwitch()}
         <div class="account">${avatarFor(Store.me.id,Store.me.name)}<div class="me-text"><b id="meName"></b><small id="roleChip">${roleName()}</small></div></div>
         ${signOutBtn()}
@@ -179,6 +278,7 @@ function mgrShell(){
     </header>
     <div class="top-menu" id="topMenu" hidden>
       <nav class="nav-list" aria-label="Manager pages">${[...MGR_PAGES,MGR_TRAINING].map(navItem).join('')}</nav>
+      <div class="top-menu-row">${liveIndicator()}${Store.mode==='local'?`<button type="button" class="button button--secondary" data-connect>${icon('qr','icon--sm')}Connect a device</button>`:''}</div>
       <div class="top-menu-row">${UI.themeSwitch()}${demoSwitch().replace('id="demoSeg"','')}${signOutBtn()}</div>
     </div>
     <main class="m-content" id="view" tabindex="-1"></main>
@@ -189,7 +289,7 @@ function empShell(){
   <header class="e-top"><div class="e-top-inner${Store.mode==='demo'?' has-demo':''}">
     <a class="brand" href="#journey" aria-label="PhishVerse journey">${UI.mark()}<span class="wordmark">PhishVerse</span></a>
     <nav class="e-nav" aria-label="Your pages">${EMP_PAGES.map(([k,l])=>`<a class="tab" href="#${k}" data-nav="${k}">${l}</a>`).join('')}</nav>
-    <div class="e-tools">${demoSwitch()}<a class="me-link" href="#profile" aria-label="Your profile" title="Your profile">${avatarFor(Store.me.id,Store.me.name)}</a><span class="sr-only" id="roleChip">${roleName()}</span></div>
+    <div class="e-tools">${liveIndicator()}${demoSwitch()}<a class="me-link" href="#profile" aria-label="Your profile" title="Your profile">${avatarFor(Store.me.id,Store.me.name)}</a><span class="sr-only" id="roleChip">${roleName()}</span></div>
   </div></header>
   <main class="e-content" id="view" tabindex="-1"></main>
   <nav class="bottom-nav" aria-label="Your pages">${EMP_PAGES.map(([k,l,ic])=>`<a href="#${k}" data-nav="${k}">${icon(ic)}<span>${l}</span></a>`).join('')}</nav>
@@ -198,6 +298,8 @@ function empShell(){
 function setMenu(open){const m=$('topMenu'),b=$('menuBtn');if(!m||!b)return;m.hidden=!open;b.setAttribute('aria-expanded',String(open));b.setAttribute('aria-label',open?'Close menu':'Open menu');b.innerHTML=icon(open?'close':'menu')}
 function bindShell(){
   app.querySelectorAll('[data-signout]').forEach(b=>b.addEventListener('click',logoutLocal));
+  app.querySelectorAll('[data-connect]').forEach(b=>b.addEventListener('click',()=>{setMenu(false);openConnect()}));
+  updateLiveIndicators();
   app.querySelectorAll('[data-r]').forEach(b=>b.addEventListener('click',()=>{if(Store.mode!=='demo')return;Store.isMgr=b.dataset.r==='mgr';history.replaceState(null,'',location.pathname+location.search);renderPortal()}));
   const mb=$('menuBtn');mb&&mb.addEventListener('click',()=>setMenu($('topMenu').hidden));
 }
@@ -268,7 +370,7 @@ function bindAuth(keep){
   $('authForm').addEventListener('submit',async e=>{e.preventDefault();const note=$('authNote'),btn=$('authBtn');note.innerHTML='';['aName','aEmail','aPw'].forEach(id=>setFieldError(id,''));
     btn.setAttribute('aria-busy','true');btn.disabled=true;
     const body={email:$('aEmail').value.trim(),password:$('aPw').value};if(authMode==='register'){body.name=$('aName').value.trim();body.dept=$('aDept').value.trim()}
-    try{setLocalMe(await API(authMode,{method:'POST',body:JSON.stringify(body)}));await loadLocalState();renderPortal()}
+    try{setLocalMe(await API(authMode,{method:'POST',body:JSON.stringify(body)}));await loadLocalState();renderPortal();startLive()}
     catch(err){btn.removeAttribute('aria-busy');btn.disabled=false;const m=err.message||'Something went wrong. Check your connection and try again.';
       const target=/your name/i.test(m)?'aName':err.status===409||/valid email/i.test(m)?'aEmail':/at least 8/i.test(m)?'aPw':null;
       if(target&&setFieldError(target,m))$(target).focus();else{note.innerHTML=icon('alert')+`<span>${esc(m)}</span>`}}});
@@ -282,19 +384,21 @@ function memberRows(){
   return ids.map(id=>{const m=Store.members[id],a=assignFor(id,m,Store.assignments[id]),pr=Store.progress[id],st=statusOf(a,pr);return{id,m,a,pr,st}});
 }
 const hasCompromise=L=>!!L&&Object.values(L.outcomes||{}).includes('compromise');
-function scoreChip(lid,pr){const L=pr&&pr.levels&&pr.levels[lid],lv=levelById(lid);if(!lv)return'';const done=L&&L.done,bad=done&&hasCompromise(L);
+function scoreChip(lid,pr,uid){const L=pr&&pr.levels&&pr.levels[lid],lv=levelById(lid);if(!lv)return'';const done=L&&L.done,bad=done&&hasCompromise(L);
   const sr=done?`Level ${lv.n}, best ${L.best}%${bad?', includes a compromised decision':''}`:`Level ${lv.n}, not finished`;
-  return`<span class="score-chip"${done?` data-state="${bad?'bad':'done'}"`:''} title="${esc(lv.title)}" aria-label="${esc(sr)}">${icon(done?(bad?'alert':'check'):'circle')}L${lv.n}${done?' · '+L.best+'%':''}</span>`}
+  const fresh=uid&&freshChips.has(uid+'/'+lid);
+  return`<span class="score-chip"${done?` data-state="${bad?'bad':'done'}"`:''}${fresh?' data-fresh':''} title="${esc(lv.title)}" aria-label="${esc(sr)}">${icon(done?(bad?'alert':'check'):'circle')}L${lv.n}${done?' · '+L.best+'%':''}</span>`}
 function personCell(r){return`<div class="person">${avatarFor(r.id,r.m.name)}<div><b>${esc(r.m.name||'Someone')}${r.id===Store.me.id?' (you)':''}</b><small>${esc(r.m.dept||'No team')}${r.pr&&r.pr.lastActive?' · active '+ago(r.pr.lastActive):''}</small></div></div>`}
 function peopleTable(rows,{details}={}){
   if(!rows.length)return emptyState('users','No one has joined yet',Store.mode==='live'?'Share this page with your team as Contributors. They appear here as soon as they open it.':Store.mode==='local'?'Employees appear here as soon as they create an account.':'Sample employees will appear here.',
     Store.mode==='local'?`<button type="button" class="button button--secondary" data-copy-link>${icon('mail','icon--sm')}Copy sign-up link</button>`:'',true);
   return`<div class="table-scroll"><table class="table table--stack people-table"><thead><tr><th scope="col">Person</th><th scope="col">Modules</th><th scope="col">Status</th><th scope="col"><span class="sr-only">Actions</span></th></tr></thead>
    <tbody data-stagger>${rows.map(r=>{
-     const chips=r.a?r.a.levels.map(l=>scoreChip(l,r.pr)).join(''):'<span class="muted" style="font-size:var(--t-xs)">No modules yet</span>';
+     const chips=r.a?r.a.levels.map(l=>scoreChip(l,r.pr,r.id)).join(''):'<span class="muted" style="font-size:var(--t-xs)">No modules yet</span>';
      const meta=r.a?`${r.a.source==='default'?'Auto plan · ':''}<span class="num">${r.st.done||0}/${r.a.levels.length}</span>${r.a.due?' · due '+fmtDate(r.a.due):''}`:'';
      const act=details?`<button type="button" class="button button--quiet button--icon" data-details="${esc(r.id)}" aria-label="Details for ${esc(r.m.name||'this person')}" title="Details">${icon('chevron')}</button>`
-       :Store.assignments[r.id]?`<button type="button" class="button button--quiet button--icon" data-unassign="${esc(r.id)}" aria-label="Remove ${esc(r.m.name||'this person')}'s assignment" title="Remove assignment">${icon('close')}</button>`:'';
+       :(canNudge(r.id)?`<button type="button" class="button button--quiet button--icon" data-nudge="${esc(r.id)}" aria-label="Send ${esc(r.m.name||'this person')} a reminder" title="Send a reminder">${icon('bell')}</button>`:'')
+        +(Store.assignments[r.id]?`<button type="button" class="button button--quiet button--icon" data-unassign="${esc(r.id)}" aria-label="Remove ${esc(r.m.name||'this person')}'s assignment" title="Remove assignment">${icon('close')}</button>`:'');
      return`<tr data-person="${esc(r.id)}" data-name="${esc((r.m.name+' '+(r.m.dept||'')).toLowerCase())}"${details?' data-href':''}><td data-col="person">${personCell(r)}</td><td data-col="modules"><div class="chips">${chips}</div></td><td data-col="status"><div class="status-cell">${statusPill(r.st)}${meta?`<small>${meta}</small>`:''}</div></td><td class="cell-actions">${act}</td></tr>`}).join('')}</tbody></table></div>`;
 }
 function teamStats(rows){let tot=0,dn=0,sc=[],att=0;
@@ -310,7 +414,7 @@ function overviewPage(){
   <div class="ov-grid"><div class="ov-main">
     <section class="panel panel--flush" aria-labelledby="tpH"><div class="panel-head"><div><h2 id="tpH">Team progress</h2><p>Scores are each person's best attempt. Red chips include at least one compromised decision.</p></div><a class="button button--quiet button--sm" href="#people">All people${icon('arrow','icon--sm')}</a></div>${peopleTable(rows)}</section>
     <section class="panel" aria-labelledby="mmH"><div class="panel-head"><div><h2 id="mmH">Most missed scenarios</h2><p>Share of attempts that ended in a compromise or a false alarm.</p></div></div>${missedList()}</section>
-  </div><div class="ov-side">${assignPanel(rows)}${defaultPlanPanel()}</div></div>`;
+  </div><div class="ov-side">${feedPanel()}${assignPanel(rows)}${defaultPlanPanel()}</div></div>`;
 }
 function missedList(){
   const agg={};Object.values(Store.progress).forEach(pr=>Object.entries(pr.levels||{}).forEach(([lid,L])=>Object.entries(L.outcomes||{}).forEach(([tid,o])=>{const k=lid+'/'+tid;agg[k]=agg[k]||{n:0,bad:0};agg[k].n++;if(o==='compromise'||o==='false_alarm')agg[k].bad++})));
@@ -348,13 +452,15 @@ function personDrawer(id){
   const ids=[...new Set([...(a?a.levels:[]),...Object.keys((pr&&pr.levels)||{})])].filter(levelById);
   const results=ids.map(lid=>{const lv=levelById(lid),L=pr&&pr.levels&&pr.levels[lid];
     const outs=L&&L.done?scoredTasks(lv).map(t=>{const o=L.outcomes&&L.outcomes[t.id];if(!o||!OUT[o])return'';const[tone,ic]=OUT_UI[o];return`<li><span data-tone="${tone}">${icon(ic)}</span><span>${esc(t.label)}</span><span class="muted" style="margin-left:auto">${OUT[o].label}</span></li>`}).join(''):'';
-    return`<article class="result-item"><header><h3>Level ${lv.n} · ${esc(lv.title)}</h3>${scoreChip(lid,pr)}</header>${L&&L.done?`<p class="muted" style="font-size:var(--t-xs)">${L.attempts} ${plural(L.attempts,'attempt')} · last ${L.last}%${L.completedAt?' · '+fmtDay(L.completedAt):''}</p><ul class="outcome-list">${outs}</ul>`:'<p class="muted" style="font-size:var(--t-xs)">Not finished yet.</p>'}</article>`}).join('');
+    return`<article class="result-item"><header><h3>Level ${lv.n} · ${esc(lv.title)}</h3>${scoreChip(lid,pr,id)}</header>${L&&L.done?`<p class="muted" style="font-size:var(--t-xs)">${L.attempts} ${plural(L.attempts,'attempt')} · last ${L.last}%${L.completedAt?' · '+fmtDay(L.completedAt):''}</p><ul class="outcome-list">${outs}</ul>`:'<p class="muted" style="font-size:var(--t-xs)">Not finished yet.</p>'}</article>`}).join('');
   const body=`<div class="drawer-person">${avatarFor(id,m.name,'lg')}<div><h3>${esc(m.name||'Someone')}</h3><p>${esc(m.dept||'No team')}${m.joinedAt?' · joined '+fmtDay(m.joinedAt):''}</p></div></div>
    <div class="drawer-section"><span class="label">Plan</span><dl class="dl"><dt>Status</dt><dd>${statusPill(st)}</dd>${a?`<dt>Source</dt><dd>${a.source==='default'?'Auto plan for new joiners':'Assigned by a manager'}</dd><dt>Modules</dt><dd>${a.levels.map(l=>'L'+levelById(l).n).join(', ')}</dd>${a.due?`<dt>Due</dt><dd>${fmtDay(new Date(a.due+'T12:00:00').getTime())}</dd>`:''}`:''}<dt>Last active</dt><dd>${pr&&pr.lastActive?ago(pr.lastActive):'never'}</dd></dl>${a&&a.note?`<div class="quote"><small>Note</small>${esc(a.note)}</div>`:''}</div>
    <div class="drawer-section"><span class="label">Results</span>${results?`<div class="result-list">${results}</div>`:'<p class="muted">No modules yet.</p>'}</div>`;
-  const foot=Store.assignments[id]?`<button type="button" class="button button--danger" data-unassign="${esc(id)}">${icon('trash','icon--sm')}Remove assignment</button>`:'';
+  const foot=(Store.assignments[id]?`<button type="button" class="button button--danger" data-unassign="${esc(id)}">${icon('trash','icon--sm')}Remove assignment</button>`:'')
+    +(canNudge(id)?`<button type="button" class="button button--secondary" data-nudge="${esc(id)}">${icon('bell','icon--sm')}Send a reminder</button>`:'');
   const d=openDrawer({title:'Person',body,footer:foot||null});
   const rb=d.el.querySelector('[data-unassign]');rb&&rb.addEventListener('click',async()=>{if(await unassign(id))d.close()});
+  const nb=d.el.querySelector('[data-nudge]');nb&&nb.addEventListener('click',()=>nudgePerson(id));
 }
 async function unassign(id){const m=Store.members[id],name=(m&&m.name)||'this person';
   const ok=await confirmModal({title:`Remove ${name}'s assignment?`,body:'Their results stay. If a default plan is set, they move to it.',confirm:'Remove assignment',danger:true});
@@ -403,7 +509,7 @@ function journeyPage(){
   const journey=a?`<section class="panel" aria-labelledby="jH"><div class="panel-head"><div><h2 id="jH">Your journey</h2><p>Modules unlock in order. Replay any finished module to improve your score.</p></div></div><ol class="journey" data-stagger>${steps}</ol></section>`:'';
   const badges=`<section class="panel" aria-labelledby="bH"><div class="panel-head"><div><h2 id="bH">Badges</h2><p>Earn one for each module you finish.</p></div></div><ul class="badge-row">${LEVELS.map(l=>{const e=lvDone(pr,l.id);return`<li class="badge" data-earned="${e}"><i>${icon(e?'check':'lock')}</i>${BADGE[l.id]}<span class="sr-only">${e?' (earned)':' (not earned yet)'}</span></li>`}).join('')}</ul></section>`;
   const practice=`<section class="panel" aria-labelledby="pH"><div class="panel-head"><div><h2 id="pH">${a?'Practice any module':'Practice modules'}</h2><p>${a?'Practice runs are recorded too, so your manager sees your best score.':'Results are saved to your record.'}</p></div></div><div class="practice-grid">${LEVELS.map(l=>`<button class="practice-item" type="button" data-play="${l.id}"><span><b>L${l.n} · ${esc(l.title)}</b><small>${esc(l.topic)}${lvDone(pr,l.id)?' · best '+pr.levels[l.id].best+'%':''}</small></span>${icon('play')}</button>`).join('')}</div></section>`;
-  return greet+program+journey+badges+practice;
+  return greet+nudgeBanner()+program+journey+badges+practice;
 }
 function profilePage(){
   const m=Store.myMember||{},name=m.name||Store.me.name||'You';
@@ -426,6 +532,9 @@ function bindView(view,page){
   view.querySelectorAll('[data-def]').forEach(c=>c.addEventListener('change',()=>{draft.defLevels=draft.defLevels||new Set(Store.config.defaultLevels||[]);c.checked?draft.defLevels.add(c.dataset.def):draft.defLevels.delete(c.dataset.def)}));
   view.querySelectorAll('[data-unassign]').forEach(b=>b.addEventListener('click',async e=>{e.stopPropagation();b.disabled=true;await unassign(b.dataset.unassign);b.disabled=false}));
   view.querySelectorAll('[data-details]').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();personDrawer(b.dataset.details)}));
+  view.querySelectorAll('[data-nudge]').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();nudgePerson(b.dataset.nudge)}));
+  const slot=view.querySelector('[data-feed-slot]');if(slot)slot.replaceWith(getFeedList());
+  view.querySelectorAll('[data-dismiss-nudge]').forEach(b=>b.addEventListener('click',()=>{try{localStorage.setItem('pv-nudge-seen',b.dataset.dismissNudge)}catch(e){}renderPortal()}));
   view.querySelectorAll('tr[data-href]').forEach(tr=>tr.addEventListener('click',e=>{if(e.target.closest('button,a,input'))return;personDrawer(tr.dataset.person)}));
   view.querySelectorAll('[data-copy-link]').forEach(b=>b.addEventListener('click',async()=>{try{await navigator.clipboard.writeText(location.origin);UI.toast('Link copied',{description:location.origin})}catch(e){UI.toast('Copy this link',{type:'info',description:location.origin})}}));
   const due=$('dueIn');due&&due.addEventListener('change',()=>{draft.due=due.value});
