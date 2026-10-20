@@ -9,6 +9,7 @@ from .api import default_config
 from .auth import new_user_id
 from .db import now_ms
 from .events import record_event
+from .journey import active_program, create_program, ensure_report
 from .sessions import new_session_id, refresh_progress
 
 DEFAULT_MANAGER = {
@@ -99,6 +100,7 @@ def seed_demo(conn, content):
         "aarav@novacorp.local": {"levels": ["orientation", "inbox", "signals"], "due": due(5), "note": "Please finish before the quarterly review."},
         "sara@novacorp.local": {"levels": list(content.level_ids), "due": due(-2), "note": ""},
         "rohan@novacorp.local": {"levels": ["orientation", "inbox"], "due": due(10), "note": ""},
+        "meera@novacorp.local": {"levels": ["orientation", "signals"], "due": due(7), "note": "Phones and texts are where we get hit most."},
     }
     # (level, outcome per scenario, finished at)
     plays = {
@@ -113,14 +115,16 @@ def seed_demo(conn, content):
             ("orientation", {"usb": "compromise", "qr": "compromise", "sticky": "safe", "laptop": "acceptable"}, t - 2 * day),
             ("inbox", {"e1": "safe", "e2": "safe", "e3": "safe", "e4": "safe", "e5": "safe", "e6": "acceptable"}, t - 8 * hour),
         ],
+        "meera@novacorp.local": [  # careful with devices and paper, caught out by calls, codes and chat
+            ("orientation", {"usb": "safe", "qr": "safe", "sticky": "safe", "laptop": "safe"}, t - 26 * hour),
+            ("signals", {"c1": "compromise", "c2": "safe", "c3": "acceptable", "c4": "false_alarm", "c5": "compromise"}, t - 20 * 60000),
+        ],
     }
     for email, a in assigns.items():
-        a.update({"assignedAt": t - 5 * day, "by": "seed"})
-        had = conn.execute("SELECT 1 FROM assignments WHERE user_id=?", (ids[email],)).fetchone()
-        conn.execute("INSERT OR REPLACE INTO assignments (user_id,data) VALUES (?,?)", (ids[email], json.dumps(a)))
-        if not had:
-            record_event(conn, ids[email], "assigned", {"levels": a["levels"], "due": a["due"], "note": a["note"], "by": "seed"},
-                         t - 5 * day)
+        if not active_program(conn, ids[email]):  # re-running --seed-demo keeps existing programs
+            p = create_program(conn, ids[email], a["levels"], a["due"], a["note"], created_by="seed", created_at=t - 5 * day)
+            record_event(conn, ids[email], "assigned", {"levels": a["levels"], "due": a["due"], "note": a["note"], "by": "seed",
+                                                        "program_id": p["id"]}, t - 5 * day)
     for email, runs in plays.items():
         for level_id, outcomes, finished_at in runs:
             exists = conn.execute("SELECT 1 FROM play_sessions WHERE user_id=? AND level_id=? AND finished_at IS NOT NULL",
@@ -128,6 +132,7 @@ def seed_demo(conn, content):
             if not exists:  # re-running --seed-demo doesn't add duplicate plays
                 record_play(conn, content, ids[email], level_id, outcomes, finished_at)
         refresh_progress(conn, ids[email])
+        ensure_report(conn, content, conn.execute("SELECT * FROM users WHERE id=?", (ids[email],)).fetchone())
     conn.commit()
     print("  Added sample employees (password for all: demo1234):")
     for email, name, _ in people:

@@ -11,6 +11,7 @@ from flask import Blueprint, current_app, jsonify, request
 
 from .auth import err, require_user
 from .db import get_db, now_ms
+from . import journey
 from .events import record_event
 
 bp = Blueprint("sessions", __name__, url_prefix="/api")
@@ -190,10 +191,12 @@ def finish_session(sid):
         progress = refresh_progress(db, u["id"])
         record_event(db, u["id"], "level_finished", {"level_id": s["level_id"], "purpose": s["purpose"], "score": score,
                                                      "stars": stars, "session_id": sid}, done_at)
+        _rep, report_ready = journey.ensure_report(db, content(), u)  # the last baseline level writes the report
         db.commit()
         s = own_session(u, sid)
     else:  # finishing twice (e.g. a retried request) just returns the result again
+        report_ready = False
         progress = json.loads((db.execute("SELECT data FROM progress WHERE user_id=?", (u["id"],)).fetchone() or ["{}"])[0])
     return jsonify({"session": session_json(s, with_decisions=False), "score": s["score"], "stars": s["stars"],
                     "outcomes": {t["id"]: got[t["id"]] for t in tasks},
-                    "progress": (progress.get("levels") or {}).get(s["level_id"])})
+                    "progress": (progress.get("levels") or {}).get(s["level_id"]), "report_ready": report_ready})

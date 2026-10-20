@@ -1,19 +1,15 @@
-"""Training data: state, assignments, config. Plus the app-wide API guards.
+"""Training data: state and config. Plus the app-wide API guards. Programs live in journey.py.
 
 Level ids come from content/levels.json; progress is written by sessions.py when a level is finished."""
 import json
-import re
 
 from flask import Blueprint, current_app, jsonify, request
 
 from .auth import err, require_user
-from .db import get_db, now_ms
-from .events import record_event
+from .db import get_db
+from . import journey as journey_mod
 
 bp = Blueprint("api", __name__, url_prefix="/api")
-
-DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
-
 
 def level_ids():
     return current_app.extensions["pv_content"].level_ids
@@ -65,52 +61,25 @@ def state():
     if e:
         return e
     db = get_db()
+    content = current_app.extensions["pv_content"]
+    mine = journey_mod.journey(db, content, u)
     out = {
         "config": get_config(),
         "myMember": member_json(u),
-        "myAssign": load_json("assignments", u["id"]),
+        # the auto plan stays implicit (id None) until it's stored; the portal derives it from config
+        "myAssign": journey_mod.assignment_json(mine["program"]) if mine["program"] and mine["program"]["id"] else None,
         "myProg": load_json("progress", u["id"]),
+        "myJourney": mine,
     }
     if u["role"] == "manager":
-        out["members"] = {r["id"]: member_json(r) for r in db.execute("SELECT * FROM users")}
-        out["assignments"] = {r["user_id"]: json.loads(r["data"]) for r in db.execute("SELECT * FROM assignments")}
+        users = db.execute("SELECT * FROM users").fetchall()
+        out["members"] = {r["id"]: member_json(r) for r in users}
+        out["journeys"] = {r["id"]: journey_mod.journey_summary(journey_mod.journey(db, content, r)) for r in users}
+        out["assignments"] = {r["user_id"]: journey_mod.assignment_json(journey_mod.program_json(r))
+                              for r in db.execute("SELECT * FROM programs WHERE status='active'")}
         out["progress"] = {r["user_id"]: json.loads(r["data"]) for r in db.execute("SELECT * FROM progress")}
+    db.commit()  # journeys may have written a report that was due
     return jsonify(out)
-
-
-@bp.put("/assignments/<uid>")
-def put_assignment(uid):
-    u, e = require_user("manager")
-    if e:
-        return e
-    db = get_db()
-    if not db.execute("SELECT 1 FROM users WHERE id=?", (uid,)).fetchone():
-        return err("No such team member.", 404)
-    b = request.get_json(silent=True) or {}
-    levels = [l for l in b.get("levels", []) if l in level_ids()]
-    if not levels:
-        return err("Pick at least one module.")
-    due = str(b.get("due", ""))
-    if due and not DATE_RE.match(due):
-        return err("Due date must look like 2026-10-31.")
-    data = {"levels": levels, "due": due, "note": str(b.get("note", ""))[:240],
-            "assignedAt": now_ms(), "by": u["id"]}
-    db.execute("INSERT OR REPLACE INTO assignments (user_id,data) VALUES (?,?)", (uid, json.dumps(data)))
-    record_event(db, uid, "assigned", {"levels": levels, "due": due, "note": data["note"], "by": u["id"]})
-    db.commit()
-    return jsonify(data)
-
-
-@bp.delete("/assignments/<uid>")
-def delete_assignment(uid):
-    u, e = require_user("manager")
-    if e:
-        return e
-    db = get_db()
-    if db.execute("DELETE FROM assignments WHERE user_id=?", (uid,)).rowcount:
-        record_event(db, uid, "unassigned", {"by": u["id"]})
-    db.commit()
-    return jsonify({"ok": True})
 
 
 @bp.put("/config")

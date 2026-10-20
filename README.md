@@ -24,6 +24,9 @@ phishverse-local/
 │   ├── sessions.py      # play sessions and decisions (server-side scoring)
 │   ├── events.py        # activity log, live updates (Server-Sent Events), reminders
 │   ├── connect.py       # LAN address + QR code for the Connect a device panel
+│   ├── journey.py       # programs and the journey: game, report, training, test, certificate
+│   ├── skills.py        # skills report scoring (strong areas, weak spots, habits)
+│   ├── demo.py          # sample plays behind the demo-mode skills reports
 │   └── seed.py          # default manager + --seed-demo sample data
 ├── migrations/          # 0001_initial.sql, 0002_..., applied in order at startup
 ├── content/             # levels.json (scenarios), skills.json, world_refs.json (generated)
@@ -49,6 +52,7 @@ phishverse-local/
         ├── touch.js     # on-screen joystick and action button for touch screens
         ├── ui.js        # design-system helpers: toast, drawer, confirm, inspected text, theme
         ├── live.js      # live updates: EventSource with reconnect and a polling fallback
+        ├── journey.js   # journey stages, skills report, training plan
         └── portal.js    # manager/employee portal + data layer
 ```
 
@@ -89,6 +93,23 @@ Then open **http://localhost:5000** in your browser.
 `--seed-demo` adds four sample employees with results so the dashboard isn't
 empty. Leave it off for a clean start.
 
+## The journey
+
+Every employee follows the same path, shown on their **Journey** page:
+
+1. **Game**: the levels their manager assigned. Their first try at each level counts.
+2. **Skills report**: ready the moment the last level is finished. It shows strong areas,
+   weak spots, the situations that revealed them (and the safer choice), the pressure tactics
+   that worked on them, and their habits. Managers see the same report in the person's panel,
+   live.
+3. **Training**: a personal plan of the skills to practise (simulations arrive in a later update).
+   Managers can adjust the plan.
+4. **Final test** and 5. **Certificate**: coming in later updates.
+
+Managers use **Assign program** on the overview to choose levels, a due date, a note, the
+final-test pass mark, how many test attempts are allowed, and whether "Watch" skills (60 to 79%)
+get training as well as weak ones.
+
 ## Accounts
 
 | Who | Email | Password |
@@ -115,12 +136,15 @@ Or pick the manager login before the first run with environment variables
    open http://localhost:5000, choose
    **Create account** and register an employee.
 3. Back in the manager window (no need to refresh: new people appear live),
-   under **Assign training**, tick the new employee, pick modules and a due date, then click **Assign**.
+   under **Assign program**, tick the new employee, pick modules and a due date, then click
+   **Assign program**.
 4. The employee window shows **New training assigned** straight away. Click
    **Start** on Level 1.
 5. Finish the level, talk to Ada, and the server scores it. Every decision is
    recorded, including which clues you inspected first. The manager's window
    shows it in **Live activity** within a second or two, without a refresh.
+6. Play the second level. The results screen offers **See your skills report**, and the
+   manager's people table shows the employee's weakest skill.
 
 ## Use it from your phone (same Wi-Fi)
 

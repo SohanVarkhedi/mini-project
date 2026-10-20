@@ -27,6 +27,8 @@ PHONE_UA = ("Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/
 EMPLOYEE = {"name": "Kavya Rao", "dept": "Finance", "email": "kavya@novacorp.local", "password": "kavya-pass-1"}
 # Level 1 outcomes: 3 safe + 1 acceptable = (1+1+1+0.6)/4 -> 90%.
 LEVEL1_OUTCOMES = {"usb": "safe", "qr": "safe", "sticky": "safe", "laptop": "acceptable"}
+# Level 2 with two slips on links, so the report has a weak spot
+LEVEL2_OUTCOMES = {"e1": "compromise", "e2": "compromise", "e3": "safe", "e4": "safe", "e5": "safe", "e6": "safe"}
 
 
 DB = {}
@@ -112,14 +114,14 @@ def test_manager_and_employee_on_two_devices(server_url, desktop, phone):
     for lid in ("signals", "access", "executive"):
         mgr.locator(f'input[data-lv="{lid}"]').uncheck()
     mgr.click("#assignBtn")
-    expect(mgr.locator(".toast-item")).to_contain_text("Assigned to 1 person")
+    expect(mgr.locator(".toast-item")).to_contain_text("Program assigned to 1 person")
     row = mgr.locator("tr[data-person]", has_text=EMPLOYEE["name"])
     expect(row.locator(".score-chip")).to_have_text(["L1", "L2"])
 
     # The employee's phone (never reloaded) gets a toast and the new journey.
     expect(emp.locator(".toast-item", has_text="New training assigned")).to_be_visible(timeout=2000)
-    expect(emp.locator(".journey .j-step")).to_have_count(2, timeout=2000)
-    start = emp.locator('.journey [data-play="orientation"]')
+    expect(emp.locator(".lvl-list .lvl")).to_have_count(2, timeout=2000)
+    start = emp.locator('.lvl-list [data-play="orientation"]')
     expect(start).to_have_text("Start")
     expect(emp.locator(".next-marker")).to_have_count(1)  # one gold marker, on the next step
     start.tap()
@@ -147,7 +149,7 @@ def test_manager_and_employee_on_two_devices(server_url, desktop, phone):
     expect(row.locator('.score-chip[data-state="done"]')).to_have_text("L1 · 90%", timeout=2000)
     feed_lag = time.time() - finished
     assert feed_lag < 2.0, feed_lag
-    expect(row.locator('[data-col="status"]')).to_contain_text("In progress")
+    expect(row.locator('[data-col="status"]')).to_contain_text("Playing · 1/2")
     expect(mgr.locator(".kpi").nth(1)).to_contain_text("1 of 4 assigned modules")  # Kavya 2 + the manager's own auto plan 2
 
     # The server recorded one session and one decision per scenario, and scored it.
@@ -162,7 +164,7 @@ def test_manager_and_employee_on_two_devices(server_url, desktop, phone):
     assert all(i == "[0]" for _, _, i in rows)
     emp.locator("#resBack").tap()
     expect(emp.locator("#portal")).to_be_visible()
-    expect(emp.locator('.j-step[data-state="done"]')).to_have_count(1)
+    expect(emp.locator('.lvl[data-state="done"]')).to_have_count(1)
 
     # The manager sends a reminder from the person's row; it reaches the phone without a reload.
     row.locator("[data-nudge]").click()
@@ -178,7 +180,42 @@ def test_manager_and_employee_on_two_devices(server_url, desktop, phone):
     row.locator("[data-nudge]").click()
     mgr.click('.modal-panel button[type="submit"]')
     expect(mgr.locator(".toast-item", has_text="Reminder not sent")).to_be_visible()
-    print(f"  live lag: finish -> manager feed {feed_lag:.2f}s, nudge -> phone toast {nudge_lag:.2f}s")
+
+    # Stage 4: the manager watches Kavya's skills report tab while she plays her last level.
+    mgr.goto(server_url + "#people")
+    mgr.locator("tr[data-person]", has_text=EMPLOYEE["name"]).locator("[data-details]").click()
+    mgr.locator('[data-dtab="report"]').click()
+    expect(mgr.locator('[data-dpanel="report"]')).to_contain_text("No skills report yet")
+    emp.locator(".lvl[data-state=next] [data-play]").tap()
+    emp.wait_for_function("() => window.G && window.G.level.id === 'inbox'")
+    emp.wait_for_selector("#dlg:not([hidden])")
+    emp.evaluate("() => closeDialog()")
+    for task_id, outcome in LEVEL2_OUTCOMES.items():
+        idx = emp.evaluate("""([id, o]) => { const t = G.level.tasks.find(x => x.id === id); openEncounter(t);
+            return t.enc.acts.findIndex(a => a.o === o) }""", [task_id, outcome])
+        emp.locator('#encIns [data-i="0"]').tap()
+        emp.locator(f'#encActs [data-a="{idx}"]').tap()
+        emp.locator("#encDone").tap()
+    emp.evaluate("() => { G.finished = true; showResults(summary()) }")
+    expect(emp.locator("#resReport")).to_have_text("See your skills report")
+    report_at = time.time()
+    # the manager's drawer and table update live, without a reload
+    expect(mgr.locator('[data-dpanel="report"] .report-summary')).to_contain_text("most at risk", timeout=2000)
+    report_lag = time.time() - report_at
+    mgr.keyboard.press("Escape")
+    krow = mgr.locator("tr[data-person]", has_text=EMPLOYEE["name"])
+    expect(krow.locator('[data-col="status"]')).to_contain_text("Training", timeout=2000)
+    expect(krow.locator('[data-col="status"]')).to_contain_text("Weakest:")
+    mgr.goto(server_url + "#overview")
+    expect(mgr.locator("#feed .feed-item").first).to_contain_text("Kavya's skills report is ready: weakest is")
+    # the employee opens the report from the results screen; the journey's next step is Training
+    emp.locator("#resReport").tap()
+    expect(emp.locator(".report-summary")).to_contain_text("most at risk")
+    expect(emp.locator('.report-next a[href="#plan"]')).to_have_text("Start your training plan")
+    emp.locator('.bottom-nav a[href="#journey"]').tap()
+    expect(emp.locator('.stage[data-current]')).to_contain_text("Training")
+    expect(emp.locator(".next-marker")).to_have_count(1)
+    print(f"  live lag: finish -> manager feed {feed_lag:.2f}s, nudge -> phone toast {nudge_lag:.2f}s, report -> manager drawer {report_lag:.2f}s")
 
     assert mgr_errors == []
     assert emp_errors == []
@@ -191,7 +228,7 @@ def test_file_demo_mode_starts_a_level(desktop):
     expect(page.locator(".banner")).to_contain_text("Demo mode (opened as a file).")
     expect(page.locator("#demoSeg")).to_be_visible()
     page.click('#demoSeg [data-r="emp"]')
-    page.click('.journey [data-play="orientation"]')
+    page.click('.lvl-list [data-play="orientation"]')
     expect(page.locator("#game")).to_be_visible()
     page.wait_for_function("() => window.G && window.G.level.id === 'orientation'")
     expect(page.locator("#dlg")).to_be_visible()  # intro dialog
@@ -211,7 +248,7 @@ def test_unreachable_server_shows_local_result(server_url, desktop):
     page.click("#authBtn")
     expect(page.locator("#greetH")).to_have_text("Hi Offline")
     page.route("**/api/sessions**", lambda route: route.abort())
-    page.locator('.journey [data-play="orientation"]').click()
+    page.locator('.lvl-list [data-play="orientation"]').click()
     page.wait_for_function("() => window.G && window.G.level.id === 'orientation'")
     page.evaluate("""() => { for (const t of scoredTasks(G.level)) onDecision(G.level.id, t, {act: 1, o: 'safe', inspected: [], ms: 1});
         for (const t of G.level.tasks) G.res[t.id] = t.enc ? {o: 'safe', insp: 0} : {o: 'talk'};

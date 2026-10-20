@@ -47,7 +47,7 @@ def test_legacy_database_upgrades_and_keeps_data(tmp_path):
     assert c.post("/api/login", json={"email": "boss@novacorp.local", "password": "oldpassword"}).status_code == 200
     state = c.get("/api/state").get_json()
     assert state["config"] == {"defaultLevels": ["access"], "defaultDueDays": 30}
-    assert state["assignments"]["u_old"] == {"levels": ["inbox"]}
+    assert state["assignments"]["u_old"]["levels"] == ["inbox"]  # the assignment became an active program
     # No second default manager was added because one already existed.
     assert [m["name"] for m in state["members"].values()] == ["Old Boss"]
 

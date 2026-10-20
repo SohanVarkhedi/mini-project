@@ -232,7 +232,7 @@ def test_seed_creates_real_sessions(app, content, sign_in):
     per_session = conn.execute("SELECT s.level_id, COUNT(d.id) FROM play_sessions s JOIN decisions d ON d.session_id=s.id "
                                "GROUP BY s.id").fetchall()
     conn.close()
-    assert n_sessions == 5 and n_decisions == 4 + 6 + 4 + 4 + 6
+    assert n_sessions == 7 and n_decisions == 4 + 6 + 4 + 4 + 6 + 4 + 5  # Aarav 2, Sara 1, Rohan 2, Meera 2
     assert all(n == len(content.scored_tasks(lid)) for lid, n in per_session)
     aarav = sign_in("aarav@novacorp.local", "demo1234")
     levels = aarav.get("/api/state").get_json()["myProg"]["levels"]

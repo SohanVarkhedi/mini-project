@@ -428,7 +428,9 @@ function showResults(s){
   confettiGo();
   Promise.resolve(onLevelComplete(lv.id,s)).then(r=>{const el=$('savedNote');if(!el)return;
     if(r&&typeof r.score==='number'&&r.score!==s.score){/* the server's score is the record */s.score=r.score;s.stars=r.stars;const b=modal.querySelector('.res .score b'),arc=$('scoreArc'),st=modal.querySelector('.res .stars');if(b)b.textContent=r.score+'%';if(arc){arc.style.strokeDashoffset=C*(1-r.score/100);arc.setAttribute('stroke',r.score>=70?'#22c55e':'#f59e0b')}if(st)st.innerHTML=starStr(r.stars)}
-    el.textContent=r&&r.saved?'Saved to your training record.':(r&&r.msg)||'Practice run: this result was not saved.';el.classList.toggle('ok',!!(r&&r.saved))});
+    el.textContent=r&&r.saved?'Saved to your training record.':(r&&r.msg)||'Practice run: this result was not saved.';el.classList.toggle('ok',!!(r&&r.saved));
+    if(r&&r.reportReady&&!$('resReport')){/* the last baseline level: the skills report is ready */const back=$('resBack'),b=document.createElement('button');b.type='button';b.className='btn wide';b.id='resReport';b.textContent='See your skills report';
+      back.classList.add('ghost');back.style.marginTop='8px';back.before(b);b.addEventListener('click',()=>{closeModal();stopGame();location.hash='#skills'});b.focus({preventScroll:true})}});
   $('resBack').addEventListener('click',()=>{closeModal();stopGame()});$('resReplay').addEventListener('click',()=>{closeModal();startLevel(lv.id,G.opts)});
 }
 $('exitBtn').addEventListener('click',()=>{if(!G)return;if(D.open)closeDialog();

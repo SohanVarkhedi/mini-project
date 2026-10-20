@@ -82,7 +82,8 @@ def test_employee_state_only_has_own_data(app, employee, manager, make_user, sig
     r = c.get("/api/state")
     assert r.status_code == 200
     body = r.get_json()
-    assert set(body) == {"config", "myMember", "myAssign", "myProg"}
+    assert set(body) == {"config", "myMember", "myAssign", "myProg", "myJourney"}
+    assert body["myJourney"]["program"]["user_id"] == uid
     assert body["myMember"]["name"] == "Asha Rao"
     assert body["myAssign"]["levels"] == ASSIGN["levels"]
     text = json.dumps(body)

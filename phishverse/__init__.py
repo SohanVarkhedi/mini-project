@@ -10,7 +10,7 @@ import secrets
 
 from flask import Flask, send_from_directory
 
-from . import api, auth, connect, db, events, seed, sessions
+from . import api, auth, connect, db, events, journey, seed, sessions
 from . import content as content_mod
 
 BASE = db.BASE
@@ -58,6 +58,7 @@ def create_app(config=None):
     app.register_blueprint(sessions.bp)
     app.register_blueprint(events.bp)
     app.register_blueprint(connect.bp)
+    app.register_blueprint(journey.bp)
 
     @app.get("/")
     def index():

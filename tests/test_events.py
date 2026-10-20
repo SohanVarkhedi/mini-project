@@ -174,7 +174,8 @@ def test_seed_writes_activity(app, content, manager):
     seed_demo(conn, content)
     conn.close()
     kinds = [e["kind"] for e in manager.get("/api/activity?limit=100").get_json()["events"]]
-    assert kinds.count("level_finished") == 5 and kinds.count("joined") == 4 and kinds.count("assigned") == 3
+    assert kinds.count("level_finished") == 7 and kinds.count("joined") == 4 and kinds.count("assigned") == 4
+    assert kinds.count("report_ready") == 2  # Rohan and Meera finished their programs' levels
 
 
 # ---------------------------------------------------------------- nudges

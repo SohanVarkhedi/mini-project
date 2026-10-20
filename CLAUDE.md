@@ -54,6 +54,13 @@ phishverse/sessions.py Blueprint: play sessions + decisions, server-side scoring
 phishverse/events.py record_event(conn, user_id, kind, data): the ONLY way to write the activity log; streams are
                      woken after the request commits. GET /api/events (SSE), GET /api/activity, POST /api/nudges.
 phishverse/connect.py lan_ip(), GET /api/connect, GET /api/connect/qr.svg (segno; manager only; needs LAN_URL).
+phishverse/journey.py Programs (one active per person; re-assign -> old one 'replaced'; the auto plan for new joiners
+                     stays virtual until its report is written), journey() derivation, ensure_report() (writes report +
+                     training plan once, emits report_ready), routes: /api/journey, /api/report, /api/plan,
+                     /api/people/<uid>/journey|report|plan (manager; PUT plan), PUT|DELETE /api/programs/<uid>
+                     (/api/assignments/<uid> is an alias).
+phishverse/skills.py Pure scoring: build_report(), summary(), habit_advice(), plan_skills(). Unit-tested by hand.
+phishverse/demo.py   DEMO_PLAYS -> demo reports in content-data.js (PV_CONTENT.demo), built with the real skills.py.
 phishverse/seed.py   ensure_defaults() (first manager + config), seed_demo() (records real sessions + decisions via
                      record_play()), set_manager_password().
 content/levels.json  Levels, tasks, scenarios (enc) and the outcome scale. Edit content here, never in JS.
@@ -92,11 +99,13 @@ web/js/ui.js         UI.* helpers (standalone): UI.toast(), openDrawer(), confir
                      UI.icon(name), UI.avatarHTML(), UI.themeSwitch()/setTheme(). (Plain toast() is the game's.)
 web/js/live.js       Live.start(lastId)/stop()/on(kind|'*', fn)/onStatus(fn)/simulate(fn) (demo). EventSource with a
                      40 s watchdog, Last-Event-ID resume, polling fallback (/api/activity?after=) every 10 s.
+web/js/journey.js    clientJourney() (demo/live mirror of the server rules), journeyStages(), reportHTML() (employee +
+                     manager drawer), reportPage() (#skills), planPage() (#plan), drawer Skills report / Training plan tabs.
 web/js/portal.js     Store + data modes, hash routing, shells, pages, sign-in, live feed/nudges/connect panel, boot.
                      Manager: #overview #people #programs #reports #settings #training. Employee: #journey #skills
                      #certificates #profile. Shell renders once per role; only #view re-renders on data refresh.
 ```
-Scripts are **classic scripts sharing globals**, loaded in order core → content-data → content → engine → touch → ui → live → portal.
+Scripts are **classic scripts sharing globals**, loaded in order core → content-data → content → engine → touch → ui → live → journey → portal.
 Do not introduce a bundler, framework or npm build unless a task explicitly asks for it.
 
 ## Data modes (portal.js `Store.mode`)
@@ -121,7 +130,11 @@ Tables (see `migrations/`): `schema_version(version,name,applied_at)`, `users(id
 `progress(user_id,data JSON)` (summary cache rebuilt on finish), `config(id=1,data JSON)`,
 `play_sessions(id,user_id,level_id,purpose baseline|practice|test,started_at,finished_at,client_version,score,stars)`,
 `decisions(id,session_id,task_id,action_index,outcome,severity,inspected_json,n_inspections,response_ms,created_at)`,
-`activity(id,user_id,kind,data_json,created_at)` (id = SSE event id).
+`activity(id,user_id,kind,data_json,created_at)` (id = SSE event id),
+`programs(id,user_id,levels_json,due,note,pass_mark,max_test_attempts,allow_watch_training,created_by,created_at,status)`,
+`reports(id,program_id,user_id,data_json,created_at)` (never changes), `training_plans(id,program_id,skills_json,...)`.
+`assignments` is legacy (migrated into programs by 0004); /api/state still returns `assignments` built from programs,
+plus `myJourney` and (manager) `journeys` {uid: summary}.
 Progress per level = finished baseline + practice sessions: best score, last, attempts, outcomes of the best attempt.
 Local mode scores on the server; demo and live modes still score on the device (live writes `progress/<uid>`).
 Mutating `/api/*` requests must be JSON (cheap CSRF guard). Session cookie: HttpOnly, SameSite=Lax.
@@ -140,6 +153,15 @@ The server refuses to start with invalid content; tests fail if content-data.js 
 Score = mean points × 100; stars ≥90 → 3, ≥70 → 2, else 1. Legit scenarios exist on purpose
 (over-reporting is penalised). `hl` keys tie a clue to highlighted parts of the artifact
 (`addr`, `link`, `body`, `attach`, `loc`).
+
+## Journey and skills report (Stage 4)
+Stages: game -> report -> training -> test -> certificate, each locked / available / in_progress / done, plus one
+`next` action, all derived on the server (journey.journey()). Evidence = the FIRST finished baseline session of each
+program level started after the program was created (replays never count). Points: safe 1, acceptable .6,
+false_alarm .4, compromise 0; severity 2/3 compromises take 0.1/0.2 off the skill total (weighted), skill floored at 0.
+Primary skill weight 1, secondary .5. Bands: Strong >= 80, Watch 60-79, Weak < 60, insufficient if weighted
+evidence < 1.5. Cues: phishing scenarios only, failure = compromise, top 3 with >= 2 scenarios. The summary only
+names a cue that was present in the weakest skill's slips. Training plan = Weak (+ Watch if allow_watch_training).
 
 ## Conventions
 - Game visuals are locked: the **dialog box design** (round portrait, green caps name, page dots,
@@ -186,6 +208,6 @@ page error or console error. Test hooks on `window`: `G` (read-only getter for t
 `showResults(summary())`. Add a test with every new endpoint or rule (auth, role check, validation).
 
 ## Roadmap
-See `docs/ROADMAP_PROMPTS.md` (stages 0–12, run in order). Stages 0–3 are done (foundation, design system, content data + decisions, live multi-device sync).
+See `docs/ROADMAP_PROMPTS.md` (stages 0–12, run in order). Stages 0–4 are done (foundation, design system, content data + decisions, live multi-device sync, journey + skills report).
 Multi-device setup and troubleshooting: docs/MULTI_DEVICE.md. Multi-company (B2B) features from
 PRODUCT_SPEC_v1 are deliberately out of scope until after the demo.

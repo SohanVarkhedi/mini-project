@@ -29,7 +29,8 @@ DEVICES = {
                   user_agent=PHONE_UA),
     "laptop": dict(viewport={"width": 1440, "height": 900}),
 }
-SCREEN_NAMES = ["sign-in", "manager-overview", "employee-journey", "styleguide", "demo-employee"]
+SCREEN_NAMES = ["sign-in", "manager-overview", "employee-journey", "styleguide", "demo-employee",
+                "journey-training", "skills-report", "manager-report-drawer"]
 
 
 APP = {}
@@ -75,7 +76,7 @@ def open_screen(page, url, name):
         page.wait_for_selector(".kpi-strip")
     elif name == "employee-journey":
         sign_in(page, url, "aarav@novacorp.local", "demo1234")
-        page.wait_for_selector(".journey")
+        page.wait_for_selector(".stages")
     elif name == "demo-employee":  # web/index.html opened as a file: demo data, role switch in the header
         page.goto((ROOT / "web" / "index.html").as_uri())
         page.wait_for_selector(".kpi-strip")
@@ -84,7 +85,22 @@ def open_screen(page, url, name):
             page.click('.top-menu [data-r="emp"]')
         else:
             page.click('#demoSeg [data-r="emp"]')
-        page.wait_for_selector(".journey")
+        page.wait_for_selector(".stages")
+    elif name == "journey-training":  # Rohan: report ready, Training is next
+        sign_in(page, url, "rohan@novacorp.local", "demo1234")
+        page.wait_for_selector(".stages .stage[data-current]")
+    elif name == "skills-report":
+        sign_in(page, url, "rohan@novacorp.local", "demo1234")
+        page.wait_for_selector(".stages")
+        page.evaluate("location.hash = '#skills'")
+        page.wait_for_selector(".report-summary")
+    elif name == "manager-report-drawer":
+        sign_in(page, url, "manager@novacorp.local", "manager123")
+        page.wait_for_selector(".kpi-strip")
+        page.evaluate("location.hash = '#people'")
+        page.locator("tr[data-person]", has_text="Meera").locator("[data-details]").click()
+        page.click('[data-dtab="report"]')
+        page.wait_for_selector('[data-dpanel="report"] .report-summary')
     elif name == "styleguide":
         page.goto(url + "styleguide.html")
         page.wait_for_selector(".sg-col")
@@ -202,7 +218,7 @@ def test_nudge_on_phone(browser, seeded_url, theme):
     who = "aarav@novacorp.local" if theme == "light" else "rohan@novacorp.local"  # one reminder per person per 10 min
     try:
         sign_in(page, seeded_url, who, "demo1234")
-        page.wait_for_selector(".journey")
+        page.wait_for_selector(".stages")
         page.wait_for_selector('.e-tools [data-live][data-state="connected"]')
         mgr = api_client("manager@novacorp.local", "manager123")
         uid = next(i for i, m in mgr.get("/api/state").get_json()["members"].items() if m["name"].lower().startswith(who[:4]))
