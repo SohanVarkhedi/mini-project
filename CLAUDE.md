@@ -60,7 +60,7 @@ phishverse/journey.py Programs (one active per person; re-assign -> old one 'rep
                      /api/people/<uid>/journey|report|plan (manager; PUT plan), PUT|DELETE /api/programs/<uid>
                      (/api/assignments/<uid> is an alias).
 phishverse/skills.py Pure scoring: build_report(), summary(), habit_advice(), plan_skills(). Unit-tested by hand.
-phishverse/demo.py   DEMO_PLAYS -> demo reports in content-data.js (PV_CONTENT.demo), built with the real skills.py.
+phishverse/demo.py   DEMO_PLAYS -> sample sessions in content-data.js (PV_CONTENT.demo); the browser builds their reports.
 phishverse/seed.py   ensure_defaults() (first manager + config), seed_demo() (records real sessions + decisions via
                      record_play()), set_manager_password().
 content/levels.json  Levels, tasks, scenarios (enc) and the outcome scale. Edit content here, never in JS.
@@ -99,13 +99,15 @@ web/js/ui.js         UI.* helpers (standalone): UI.toast(), openDrawer(), confir
                      UI.icon(name), UI.avatarHTML(), UI.themeSwitch()/setTheme(). (Plain toast() is the game's.)
 web/js/live.js       Live.start(lastId)/stop()/on(kind|'*', fn)/onStatus(fn)/simulate(fn) (demo). EventSource with a
                      40 s watchdog, Last-Event-ID resume, polling fallback (/api/activity?after=) every 10 s.
-web/js/journey.js    clientJourney() (demo/live mirror of the server rules), journeyStages(), reportHTML() (employee +
+web/js/rules.js      PVRules (no DOM): buildReport/summary/habitAdvice/planSkills/journey, a line-by-line mirror of
+                     skills.py + journey.journey(). Used by demo and live modes (and loadable in Node).
+web/js/journey.js    clientJourney() (runs PVRules on recorded sessions), journeyStages(), reportHTML() (employee +
                      manager drawer), reportPage() (#skills), planPage() (#plan), drawer Skills report / Training plan tabs.
 web/js/portal.js     Store + data modes, hash routing, shells, pages, sign-in, live feed/nudges/connect panel, boot.
                      Manager: #overview #people #programs #reports #settings #training. Employee: #journey #skills
                      #certificates #profile. Shell renders once per role; only #view re-renders on data refresh.
 ```
-Scripts are **classic scripts sharing globals**, loaded in order core → content-data → content → engine → touch → ui → live → journey → portal.
+Scripts are **classic scripts sharing globals**, loaded in order core → content-data → content → engine → touch → ui → live → rules → journey → portal.
 Do not introduce a bundler, framework or npm build unless a task explicitly asks for it.
 
 ## Data modes (portal.js `Store.mode`)
@@ -162,6 +164,9 @@ false_alarm .4, compromise 0; severity 2/3 compromises take 0.1/0.2 off the skil
 Primary skill weight 1, secondary .5. Bands: Strong >= 80, Watch 60-79, Weak < 60, insufficient if weighted
 evidence < 1.5. Cues: phishing scenarios only, failure = compromise, top 3 with >= 2 scenarios. The summary only
 names a cue that was present in the weakest skill's slips. Training plan = Weak (+ Watch if allow_watch_training).
+**The rules live twice: phishverse/skills.py + journey.py (server) and web/js/rules.js (demo/live). Change both
+together, in the same commit.** tests/e2e/test_parity.py runs fixture histories through both and requires identical
+journeys, next actions, scores, bands, cues, habits and summary text.
 
 ## Conventions
 - Game visuals are locked: the **dialog box design** (round portrait, green caps name, page dots,

@@ -1,8 +1,8 @@
 /* =========================================================
    JOURNEY + SKILLS REPORT (portal). Game -> Skills report -> Training -> Final test -> Certificate.
    Local mode: the server derives the journey (/api/state myJourney, journeys) and stores reports.
-   Demo/live modes: clientJourney() mirrors the server's rules; demo reports come from PV_CONTENT.demo
-   (built with the real skills.py). Uses portal.js globals at call time (Store, icon, esc, API, ...).
+   Demo/live modes: clientJourney() runs js/rules.js (kept identical to the server by tests/e2e/test_parity.py)
+   on recorded sessions (PV_CONTENT.demo sample sessions + plays made in the demo). Uses portal.js globals at call time (Store, icon, esc, API, ...).
    ========================================================= */
 const SKILLS=(window.PV_CONTENT&&PV_CONTENT.skills)||[];
 const skillById=id=>SKILLS.find(s=>s.id===id);
@@ -17,27 +17,20 @@ const STAGE_TITLE={game:'Game',report:'Skills report',training:'Training',test:'
 const bandPill=b=>{const[tone,ic,label]=BAND_UI[b]||BAND_UI.insufficient;return`<span class="status-pill"${tone?` data-tone="${tone}"`:''}>${icon(ic)}${label}</span>`};
 const reportCache={};/* uid -> report | null (none yet) */
 
-/* ---------- journey in demo/live (the server does this in local mode) ---------- */
+/* ---------- journey in demo/live: web/js/rules.js, the same rules as the server ---------- */
+function sessionsFor(uid){
+  if(Store.mode==='demo')return(Store.demoSessions&&Store.demoSessions[uid])||[];
+  /* live mode keeps only progress summaries: rebuild one session per finished level from them */
+  const pr=uid===Store.me.id?(Store.myProg||Store.progress[uid]):Store.progress[uid];
+  return Object.entries((pr&&pr.levels)||{}).filter(([lid,L])=>L.done&&levelById(lid)).map(([lid,L],n)=>({level_id:lid,purpose:'baseline',started_at:1+n,finished_at:L.completedAt||2+n,score:L.best,
+    decisions:scoredTasks(levelById(lid)).map(t=>{const o=(L.outcomes||{})[t.id]||'safe',i=Math.max(0,t.enc.acts.findIndex(a=>a.o===o));return{task_id:t.id,action_index:i,outcome:o,severity:o==='compromise'?(t.enc.acts[i].sev||null):null,n_inspections:1,response_ms:8000}})}));
+}
 function clientJourney(uid){
   const isMe=uid===Store.me.id,m=isMe?(Store.myMember||Store.members[uid]):Store.members[uid];
-  const a=assignFor(uid,m,isMe?(Store.myAssign||Store.assignments[uid]):Store.assignments[uid]),pr=isMe?(Store.myProg||Store.progress[uid]):Store.progress[uid];
-  if(!a)return{program:null,levels:[],stages:Object.keys(STAGE_TITLE).map(id=>({id,title:STAGE_TITLE[id],state:'locked',description:STAGE_ABOUT[id]})),current:null,next:null,report_id:null,weakest:null,plan:null};
-  let next=null;const levels=a.levels.filter(levelById).map(lid=>{const L=levelById(lid),done=lvDone(pr,lid),state=done?'done':(next?'locked':(next=lid,'next'));return{id:lid,n:L.n,title:L.title,state,score:done?pr.levels[lid].best:null,started:false}});
-  const played=levels.filter(l=>l.state==='done').length,gameDone=played===levels.length;
-  const rep=gameDone&&Store.mode==='demo'&&PV_CONTENT.demo?PV_CONTENT.demo.reports[uid]||null:null;
-  const plan=rep?[...rep.weak,...(a.allowWatchTraining===false?[]:rep.watch)]:null;
-  const st={game:[gameDone?'done':played?'in_progress':'available',`${played} of ${levels.length} levels played.`],
-    report:[rep?'done':'locked',rep?'Ready.':"Unlocks when you've played every level once."],
-    training:!rep?['locked','Short simulations for the skills your report flags.']:plan.length?['available',`${plan.length} skill${plan.length===1?'':'s'} to practise: ${plan.slice(0,3).map(s=>skillById(s).name).join(', ')}. Simulations arrive in the next update.`]:['done',"No weak spots, so there's nothing you have to practise."],
-    test:['locked',`Unseen scenarios, no hints. Pass mark ${a.passMark||70}%. Arrives in a later update.`],
-    certificate:['locked','Pass the final test to earn a certificate your manager can verify.']};
-  const stages=Object.keys(STAGE_TITLE).map(id=>({id,title:STAGE_TITLE[id],state:st[id][0],description:st[id][1],about:STAGE_ABOUT[id]}));
-  const current=(stages.find(s=>s.state!=='done')||{}).id||null;let nx=null;
-  if(current==='game'){const L=levelById(next);nx={stage:'game',action:'play',level_id:next,label:`Start Level ${L.n} · ${L.title}`}}
-  else if(current==='training')nx={stage:'training',action:'plan',label:'Start your training plan'};
-  else if(current==='test')nx={stage:'test',action:null,label:'The final test opens in a later update'};
-  return{program:{levels:a.levels,due:a.due,note:a.note,pass_mark:a.passMark||70,allow_watch_training:a.allowWatchTraining!==false,source:a.source},levels,stages,current,next:nx,
-    report_id:rep?rep.id:null,weakest:rep?rep.weakest:null,plan:plan?{skills:plan}:null,overdue:!!(a.due&&!gameDone&&a.due<todayISO())};
+  const a=assignFor(uid,m,isMe?(Store.myAssign||Store.assignments[uid]):Store.assignments[uid]);
+  const program=a?{levels:a.levels.filter(levelById),due:a.due||'',note:a.note||'',pass_mark:a.passMark||70,allow_watch_training:a.allowWatchTraining!==false,created_at:0,source:a.source}:null;
+  const j=PVRules.journey(PV_CONTENT,SKILLS,program,sessionsFor(uid),null,todayISO());
+  return{...j,report_id:j.report?'local_'+uid:null};
 }
 const myJourney=()=>Store.mode==='local'&&Store.myJourney?Store.myJourney:clientJourney(Store.me.id);
 function journeySummary(uid){
@@ -84,7 +77,7 @@ function levelRow(l,pr){
 /* ---------- the report (employee page + manager drawer) ---------- */
 async function loadReport(uid){
   const self=uid===Store.me.id;
-  if(Store.mode!=='local'){const r=PV_CONTENT.demo&&PV_CONTENT.demo.reports[uid];const j=self?myJourney():clientJourney(uid);return j.report_id?r:null}
+  if(Store.mode!=='local'){const j=self?myJourney():clientJourney(uid);return j.report?{...j.report,id:j.report_id,created_at:Date.now()}:null}
   if(uid in reportCache)return reportCache[uid];
   try{reportCache[uid]=await API(self?'report':`people/${encodeURIComponent(uid)}/report`)}catch(e){if(e.status===404)reportCache[uid]=null;else throw e}
   return reportCache[uid];

@@ -45,9 +45,10 @@ function initDemo(){
     a2:{levels:{orientation:mk(100,{usb:'safe',qr:'safe',sticky:'safe',laptop:'safe'})},lastActive:now-4*dayMs},
     a3:{levels:{orientation:mk(55,{usb:'compromise',qr:'compromise',sticky:'safe',laptop:'acceptable'}),inbox:mk(93,{e1:'safe',e2:'safe',e3:'safe',e4:'safe',e5:'safe',e6:'acceptable'})},lastActive:now-8*3600e3}};
   Store.config={defaultLevels:['orientation','inbox'],defaultDueDays:14};
-  /* sample plays behind the demo skills reports (PV_CONTENT.demo, built with the real scoring code) */
-  for(const[uid,levels]of Object.entries((PV_CONTENT.demo&&PV_CONTENT.demo.plays)||{})){const pr=Store.progress[uid]=Store.progress[uid]||{levels:{},lastActive:now-dayMs};
-    for(const[lid,v]of Object.entries(levels))pr.levels[lid]={best:v.score,last:v.score,stars:v.stars,done:true,attempts:1,completedAt:now-dayMs,outcomes:v.outcomes}}
+  /* sample sessions behind the demo skills reports (PV_CONTENT.demo; reports come from js/rules.js) */
+  Store.demoSessions=JSON.parse(JSON.stringify((PV_CONTENT.demo&&PV_CONTENT.demo.sessions)||{}));
+  for(const[uid,list]of Object.entries(Store.demoSessions)){const pr=Store.progress[uid]=Store.progress[uid]||{levels:{},lastActive:now-dayMs};
+    for(const v of list)pr.levels[v.level_id]={best:v.score,last:v.score,stars:v.stars,done:true,attempts:1,completedAt:now-dayMs,outcomes:v.outcomes}}
   syncMine();Store.ready=true;startDemoLive();renderPortal();
 }
 function syncMine(){const id=Store.me.id;if(Store.mode==='demo'){Store.myMember=Store.members[id]||null;Store.myAssign=Store.assignments[id]||null;Store.myProg=Store.progress[id]||null}}
@@ -109,6 +110,10 @@ async function logoutLocal(){Live.stop();Store.activity=[];feedList=null;try{awa
 const CLIENT_VERSION='pv-web-2';
 let play=null; /* {levelId, queue: Promise<session id|null>, unsent: [decision bodies]} */
 onLevelStart=lid=>{
+  if(Store.mode==='demo'){/* demo: record the play so js/rules.js can build a real journey and report */
+    const a=assignFor(Store.me.id,Store.myMember,Store.myAssign);
+    play={levelId:lid,demo:{level_id:lid,purpose:a&&a.levels.includes(lid)?'baseline':'practice',started_at:Date.now(),finished_at:null,score:null,decisions:[]}};
+    (Store.demoSessions[Store.me.id]=Store.demoSessions[Store.me.id]||[]).push(play.demo);return}
   if(Store.mode!=='local'||!Store.authed){play=null;return}
   const a=assignFor(Store.me.id,Store.myMember,Store.myAssign),purpose=a&&a.levels.includes(lid)?'baseline':'practice';
   const p={levelId:lid,unsent:[]};
@@ -118,6 +123,7 @@ onLevelStart=lid=>{
 const sendDecision=(sid,body)=>API(`sessions/${encodeURIComponent(sid)}/decisions`,{method:'POST',body:JSON.stringify(body)}).then(()=>true).catch(e=>e.status===409);/* 409: already recorded */
 onDecision=(lid,task,d)=>{
   const p=play;if(!p||p.levelId!==lid)return;
+  if(p.demo){const act=task.enc.acts[d.act];p.demo.decisions.push({task_id:task.id,action_index:d.act,outcome:act.o,severity:act.o==='compromise'?(act.sev||null):null,n_inspections:d.inspected.length,response_ms:d.ms});return}
   const body={task_id:task.id,action_index:d.act,inspected:d.inspected,response_ms:d.ms};
   p.queue=p.queue.then(async sid=>{if(sid&&!await sendDecision(sid,body))p.unsent.push(body);return sid});
 };
@@ -139,7 +145,9 @@ onLevelComplete=(lid,s)=>{
     const cur=JSON.parse(JSON.stringify(Store.myProg||{levels:{}}));cur.levels=cur.levels||{};const L=cur.levels[lid]||{attempts:0,best:0,stars:0};
     L.attempts=(L.attempts||0)+1;L.last=s.score;if(s.score>=(L.best||0)){L.best=s.score;L.outcomes=s.outcomes}L.stars=Math.max(L.stars||0,s.stars);L.done=true;L.completedAt=Date.now();L.timeMs=s.timeMs;
     cur.levels[lid]=L;cur.lastActive=Date.now();
-    if(Store.mode==='demo'){Store.progress[Store.me.id]=cur;syncMine();return{saved:false,msg:'Demo mode: saved for this session only.'}}
+    if(Store.mode==='demo'){Store.progress[Store.me.id]=cur;syncMine();
+      const before=myJourney().report_id;if(play&&play.demo&&play.levelId===lid){play.demo.finished_at=Date.now();play.demo.score=s.score}
+      return{saved:false,msg:'Demo mode: saved for this session only.',reportReady:!before&&!!myJourney().report_id}}
     if(Store.canWrite===false)return{saved:false,msg:'View-only access: ask your manager for Contributor access so results can be saved.'};
     const r=await write('progress/'+Store.me.id,cur);if(r===true){Store.myProg=cur;return{saved:true}}
     return{saved:false,msg:r==='invalid_argument'?'Your access level is view-only, so this result could not be saved.':'Could not save right now. Your result is shown above.'};

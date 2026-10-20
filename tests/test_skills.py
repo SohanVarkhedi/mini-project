@@ -162,3 +162,21 @@ def test_summary_only_links_cues_that_were_part_of_the_slips():
     slipped = {c for x in next(s for s in r["skills"] if s["id"] == weakest)["revealed"] if x["outcome"] == "compromise" for c in x["cues"]}
     named = [c for c in r["cues"] if c["phrase"] in text]
     assert all(c["cue"] in slipped for c in named)
+
+
+@pytest.mark.parametrize("n", [1, 2, 3, 10])
+def test_safe_call_sentence_reads_naturally_for_every_count(n):
+    from phishverse.skills import _safe_calls
+    for k in range(n + 1):
+        text = _safe_calls(k, n, True)
+        assert text.endswith(".") and "start to build on" not in text
+        assert " 0 of" not in text and "1 situations" not in text and "of 1 " not in text
+        assert not (k == n and f"{k} of {n}" in text)  # "all 10" / "both", never "10 of 10"
+    assert _safe_calls(0, 10, True) == "None of your 10 choices was the safe call."
+    assert _safe_calls(7, 10, True) == "You made the safe call in 7 of 10 situations."
+    assert _safe_calls(10, 10, False) == "They made the safe call in all 10 situations."
+
+
+def test_zero_clues_advice():
+    tips = habit_advice({"decisions": 6, "inspected": 0, "median_ms": None, "genuine": 0, "false_alarms": 0})
+    assert tips[0]["text"] == "You decided without opening any clues. Checking first is the habit that catches most scams."

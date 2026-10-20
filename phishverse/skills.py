@@ -181,6 +181,18 @@ def _of(k, n, noun):
     return f"{k} of {n} {noun}s"
 
 
+def _safe_calls(k, n, you):
+    """The no-strong-areas opening sentence, natural for every k from 0 to n."""
+    subj, poss = ("You", "your") if you else ("They", "their")
+    if n == 1:
+        return f"{subj} made the safe call in the one situation." if k else f"{subj} didn't make the safe call in the one situation."
+    if k == 0:
+        return f"None of {poss} {n} choices was the safe call."
+    if k == n:
+        return f"{subj} made the safe call in {'both' if n == 2 else f'all {n}'} situations."
+    return f"{subj} made the safe call in {k} of {n} situations."
+
+
 def _count_word(n):
     return ["no", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"][n] if 0 <= n <= 10 else str(n)
 
@@ -197,8 +209,7 @@ def summary(report, perspective="you"):
         safe = len({t for s in strong for t in s["safe_tasks"]})
         sents.append(f"{'You were' if you else 'They were'} strong on {names}, making the safe call in {_of(safe, n, 'situation')} there.")
     elif report["decisions"]:
-        sents.append(f"{'You' if you else 'They'} made the safe call in {_of(report['safe'], report['decisions'], 'situation')}, "
-                     f"a start to build on.")
+        sents.append(_safe_calls(report["safe"], report["decisions"], you))
     w = report["weakest"]
     if w:
         s = sk[w["id"]]
@@ -227,7 +238,9 @@ def habit_advice(h):
     n = h["decisions"]
     if n:
         k = h["inspected"]
-        if k == n:
+        if k == 0:
+            tips.append({"icon": "search", "text": "You decided without opening any clues. Checking first is the habit that catches most scams."})
+        elif k == n:
             tips.append({"icon": "search", "text": f"You opened clues before deciding in {_of(k, n, 'situation')}. Keep that habit: checking first catches most scams."})
         elif k / n >= 0.8:
             tips.append({"icon": "search", "text": f"You opened clues before deciding in {k} of {n} situations. Keep that habit: checking first catches most scams."})
