@@ -37,7 +37,9 @@
   <div class="room" id="room"><small>Now entering</small><span id="roomName">Lobby</span></div>
   <div class="toast" id="toast"><div class="flag" id="toastIcon">✓</div><div><small id="toastKind">Objective complete</small><strong id="toastText">Baiting</strong></div></div>
   <div class="prompt" id="prompt"><kbd>SPACE</kbd><span id="promptVerb">Talk</span></div>
-  <button class="tapbtn" id="tapBtn" type="button" hidden>TALK</button>
+  <div class="joy-zone" id="joyZone" aria-hidden="true" hidden></div>
+  <div class="joy" id="joy" aria-hidden="true" hidden><i class="joy-tick" data-d="up"></i><i class="joy-tick" data-d="right"></i><i class="joy-tick" data-d="down"></i><i class="joy-tick" data-d="left"></i><div class="joy-knob" id="joyKnob"></div></div>
+  <button class="actbtn" id="tapBtn" type="button" hidden aria-label="Action: nothing in front of you"><span class="actbtn-a" aria-hidden="true">A</span><span class="actbtn-verb" id="actVerb" aria-hidden="true"></span></button>
 
   <div class="dlg" id="dlg" hidden role="dialog" aria-live="polite">
     <div class="dlg-portrait"><canvas id="dlgPortrait" width="56" height="56"></canvas><span class="ico" id="dlgIcon" hidden></span></div>
@@ -56,6 +58,7 @@
 <script src="js/content-data.js"></script>
 <script src="js/content.js"></script>
 <script src="js/engine.js"></script>
+<script src="js/touch.js"></script>
 <script src="js/ui.js"></script>
 <script src="js/live.js"></script>
 <script src="js/portal.js"></script>

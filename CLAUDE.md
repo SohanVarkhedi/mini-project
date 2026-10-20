@@ -84,6 +84,10 @@ web/js/engine.js     Actors, level state G, rendering + quest highlights, minima
                      debrief/results, audio, startLevel/stopGame. Hooks the portal sets: onLevelStart(levelId, opts),
                      onDecision(levelId, task, {act, o, inspected:[clue idx in order], ms}), onLevelComplete(levelId, summary)
                      (may return {saved, score, stars}; the results card then shows the server's score).
+web/js/touch.js      Pad: touch controls (floating joystick + A button). Feeds the keyboard's `held` stack/`running`
+                     flag; 4-way with 25% dead zone + axis hysteresis; run at 85%; engine calls Pad.frame() each frame.
+                     Pad.setLefty() (Profile toggle, localStorage pv-lefty). Acts on pointerdown; cancels touchstart
+                     so no ghost click lands on a modal opened under the finger.
 web/js/ui.js         UI.* helpers (standalone): UI.toast(), openDrawer(), confirmModal(), renderAddr(text,{flag}),
                      UI.icon(name), UI.avatarHTML(), UI.themeSwitch()/setTheme(). (Plain toast() is the game's.)
 web/js/live.js       Live.start(lastId)/stop()/on(kind|'*', fn)/onStatus(fn)/simulate(fn) (demo). EventSource with a
@@ -92,7 +96,7 @@ web/js/portal.js     Store + data modes, hash routing, shells, pages, sign-in, l
                      Manager: #overview #people #programs #reports #settings #training. Employee: #journey #skills
                      #certificates #profile. Shell renders once per role; only #view re-renders on data refresh.
 ```
-Scripts are **classic scripts sharing globals**, loaded in order core → content-data → content → engine → ui → live → portal.
+Scripts are **classic scripts sharing globals**, loaded in order core → content-data → content → engine → touch → ui → live → portal.
 Do not introduce a bundler, framework or npm build unless a task explicitly asks for it.
 
 ## Data modes (portal.js `Store.mode`)

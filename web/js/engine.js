@@ -191,7 +191,6 @@ function clickWorld(wx,wy){
   const tg=targetAt(tx,ty);if(tg)return walkToTarget(tg);sfx('bump');
 }
 cv.addEventListener('pointerdown',e=>{if(!G||G.paused)return;if(D.open){advance();return}audioInit();clickWorld(cam.x+(e.clientX)*dpr/Zd,cam.y+(e.clientY)*dpr/Zd)});
-$('tapBtn').addEventListener('click',()=>{if(D.open)advance();else tryInteract()});
 
 function decideMove(speed){
   if(held.length){const d=held[held.length-1];if(d!==player.dir&&!player.moving&&performance.now()-pressAt[d]<85&&player.animT===0){player.dir=d;return false}if(player.start(d,speed))return true;player.dir=d;return false}
@@ -217,14 +216,14 @@ function updateCamera(dt,snap){
   const k=snap?1:1-Math.exp(-dt*7);camR.x+=(tx-camR.x)*k;camR.y+=(ty-camR.y)*k;if(snap){camR.x=tx;camR.y=ty}
   cam.x=Math.round(camR.x*Zd)/Zd;cam.y=Math.round(camR.y*Zd)/Zd;cam.x=Math.max(0,Math.min(Wm-VW,cam.x));cam.y=Math.max(0,Math.min(Hm-VH,cam.y));
 }
-const promptEl=$('prompt'),promptVerb=$('promptVerb');let isTouch=false;addEventListener('touchstart',()=>{isTouch=true},{once:true,passive:true});
+const promptEl=$('prompt'),promptVerb=$('promptVerb');/* touch controls (joystick + action button): js/touch.js */
 function updatePrompt(){
-  const off=()=>{promptEl.classList.remove('on');$('tapBtn').hidden=true};
+  const off=()=>{promptEl.classList.remove('on')};
   if(D.open||player.moving||G.paused)return off();
   const[x,y]=frontTile(player);const tg=targetAt(x,y);if(!tg)return off();
   const quest=isTargetRef(tg);promptEl.classList.toggle('quest',quest);promptVerb.textContent=quest?(tg.type==='npc'?'Talk':'Investigate'):(tg.type==='npc'?'Talk':'Inspect');
   const g=tg.type==='npc'?{cx:(tg.n.mode==='sit'?tg.n.x*T+16:tg.n.px+8),top:(tg.n.mode==='sit'?tg.n.y*T-12:tg.n.py-14)}:(()=>{const b=objBox(tg.o,time);return b?{cx:b.cx,top:b.top}:{cx:(tg.o.x+tg.o.w/2)*T,top:tg.o.y*T}})();
-  const lift=quest?24:4;promptEl.style.left=((g.cx-cam.x)*Zd/dpr)+'px';promptEl.style.top=((g.top-lift-cam.y)*Zd/dpr)+'px';promptEl.classList.add('on');$('tapBtn').hidden=!isTouch;
+  const lift=quest?24:4;promptEl.style.left=((g.cx-cam.x)*Zd/dpr)+'px';promptEl.style.top=((g.top-lift-cam.y)*Zd/dpr)+'px';promptEl.classList.add('on');
 }
 let roomTimer=0;function showRoom(n){const el=$('room');$('roomName').textContent=n;el.classList.add('show');clearTimeout(roomTimer);roomTimer=setTimeout(()=>el.classList.remove('show'),2200)}
 function burst(x,y,col){const a=Math.random()*Math.PI*2,s=30+Math.random()*60;particles.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s-40,g:120,life:.8+Math.random()*.4,t:0,col,sz:Math.random()<.5?1:2})}
@@ -239,7 +238,7 @@ function loop(now){
   steamT-=dt;if(steamT<=0){steamT=.22;particles.push({x:41+Math.random()*4,y:468,vx:(Math.random()-.5)*4,vy:-10-Math.random()*6,g:0,life:1.4,t:0,col:'rgba(255,255,255,.5)',sz:Math.random()<.5?1:2,fade:1})}
   for(let i=particles.length-1;i>=0;i--){const p=particles[i];p.t+=dt;p.vy+=(p.g||0)*dt;p.x+=p.vx*dt;p.y+=p.vy*dt;if(p.t>p.life)particles.splice(i,1)}
   if(marker){marker.t+=dt;if(marker.t>.5)marker=null}
-  render();updatePrompt();miniT-=dt;if(miniT<=0&&!mini.hidden){miniT=1/20;drawMini()}
+  render();updatePrompt();if(typeof Pad!=='undefined')Pad.frame();miniT-=dt;if(miniT<=0&&!mini.hidden){miniT=1/20;drawMini()}
 }
 
 /* =========================================================

@@ -46,6 +46,7 @@ phishverse-local/
         ├── content-data.js # generated from content/*.json (lets demo mode work from a file)
         ├── content.js   # NPCs and object placement
         ├── engine.js    # movement, rendering, highlights, dialog, encounters, audio
+        ├── touch.js     # on-screen joystick and action button for touch screens
         ├── ui.js        # design-system helpers: toast, drawer, confirm, inspected text, theme
         ├── live.js      # live updates: EventSource with reconnect and a polling fallback
         └── portal.js    # manager/employee portal + data layer
@@ -175,7 +176,13 @@ a Manager/Employee switch. Nothing is saved.
 | Shift | Hurry |
 | Space / E | Talk, inspect |
 | Click / tap | Walk there (click a person to talk) |
+| Joystick (touch screens, bottom-left) | Walk; push to the edge to hurry |
+| **A** button (touch screens, bottom-right) | Talk, inspect, next page |
 | M | Toggle minimap |
+
+On phones and tablets the joystick appears under your thumb anywhere in the lower-left of the
+screen, and the **A** button glows gold when something is in front of you. Left-handed? Turn on
+**Left-handed controls** on the Profile page to swap the sides.
 
 Gold glow, beams and edge arrows mark your objectives. Click an objective in
 the top-right list to walk to it.

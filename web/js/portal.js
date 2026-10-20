@@ -517,6 +517,7 @@ function profilePage(){
    <dl class="dl">${Store.me.email?`<dt>Email</dt><dd>${UI.renderAddr(Store.me.email)}</dd>`:''}${m.joinedAt?`<dt>Joined</dt><dd>${fmtDay(m.joinedAt)}</dd>`:''}</dl></section>
    <section class="panel" aria-labelledby="stH"><div class="panel-head"><div><h2 id="stH">This device</h2><p>Settings here apply only to this browser.</p></div></div>
     <div class="form-stack"><div class="setting-row"><div><b>Theme</b><small>System follows your phone or computer.</small></div>${UI.themeSwitch()}</div>
+    <label class="check"><input type="checkbox" id="leftyIn" ${typeof Pad!=='undefined'&&Pad.lefty?'checked':''}><span>Left-handed controls<small>On touch screens, puts the joystick on the right and the action button on the left.</small></span></label>
     ${Store.mode==='local'?`<div class="setting-row"><div><b>Sign out</b><small>You can sign back in with your email and password.</small></div><button type="button" class="button button--secondary" data-signout>${icon('logout','icon--sm')}Sign out</button></div>`:''}</div></section>`;
 }
 
@@ -527,6 +528,7 @@ function bindView(view,page){
   view.querySelectorAll('[data-play]').forEach(b=>b.addEventListener('click',()=>{audioInit();startLevel(b.dataset.play,{graded:true})}));
   view.querySelectorAll('[data-art]').forEach(el=>el.append(modArt(levelById(el.dataset.art))));
   view.querySelectorAll('[data-signout]').forEach(b=>b.addEventListener('click',logoutLocal));
+  const li=$('leftyIn');li&&li.addEventListener('change',()=>{Pad.setLefty(li.checked);UI.toast(li.checked?'Left-handed controls on':'Left-handed controls off',{description:li.checked?'Joystick on the right, action button on the left.':'Joystick on the left, action button on the right.'})});
   view.querySelectorAll('[data-sel]').forEach(c=>c.addEventListener('change',()=>{c.checked?draft.sel.add(c.dataset.sel):draft.sel.delete(c.dataset.sel);updAssignBtn()}));
   view.querySelectorAll('[data-lv]').forEach(c=>c.addEventListener('change',()=>{c.checked?draft.levels.add(c.dataset.lv):draft.levels.delete(c.dataset.lv);updAssignBtn()}));
   view.querySelectorAll('[data-def]').forEach(c=>c.addEventListener('change',()=>{draft.defLevels=draft.defLevels||new Set(Store.config.defaultLevels||[]);c.checked?draft.defLevels.add(c.dataset.def):draft.defLevels.delete(c.dataset.def)}));
