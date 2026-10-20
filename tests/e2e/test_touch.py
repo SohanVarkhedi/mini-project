@@ -327,10 +327,9 @@ def test_screenshots(browser, orientation, size):
         tracker = page.locator("#tracker").bounding_box()
         assert btn["y"] > tracker["y"] + tracker["height"] or btn["x"] + btn["width"] < tracker["x"]
         assert btn["y"] + btn["height"] <= size[1] - 20 and joy["y"] + joy["height"] <= size[1] - 20  # clear of the gesture area
-        mini = page.locator("#mini")
-        if mini.is_visible():
-            m = mini.bounding_box()
-            assert joy["x"] >= m["x"] + m["width"], (joy, m)  # beside the minimap, not on top of it
+        # no minimap on phones (narrow portrait or short landscape): the stick rests at its normal spot
+        expect(page.locator("#mini")).to_be_hidden()
+        assert joy["x"] < 40, joy
         zone = page.locator("#joyZone").bounding_box()
         assert zone["x"] + zone["width"] >= joy["x"] + joy["width"]  # the whole resting stick is touchable
         assert errors == []
@@ -374,5 +373,28 @@ def test_left_handed_setting_on_profile(browser):
         page.reload()
         assert page.evaluate("Pad.lefty") is True  # saved per device
         page.evaluate("Pad.setLefty(false)")
+    finally:
+        ctx.close()
+
+
+def test_minimap_still_on_desktop_and_m_toggles(browser):
+    ctx, page, _ = open_game(browser, viewport={"width": 1440, "height": 900})
+    try:
+        expect(page.locator("#mini")).to_be_visible()
+        page.keyboard.press("KeyM")
+        expect(page.locator("#mini")).to_be_hidden()
+        page.keyboard.press("KeyM")
+        expect(page.locator("#mini")).to_be_visible()
+    finally:
+        ctx.close()
+
+
+def test_tablet_landscape_keeps_minimap_beside_the_stick(browser):
+    ctx, page, _ = open_game(browser, viewport={"width": 1024, "height": 768}, device_scale_factor=2,
+                             is_mobile=True, has_touch=True)
+    try:
+        expect(page.locator("#mini")).to_be_visible()
+        m, joy = page.locator("#mini").bounding_box(), page.locator("#joy").bounding_box()
+        assert joy["x"] >= m["x"] + m["width"]
     finally:
         ctx.close()

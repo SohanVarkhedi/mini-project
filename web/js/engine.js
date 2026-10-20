@@ -120,7 +120,7 @@ function render(){
   /* edge arrows for off-screen goals */
   const m=46*dpr;
   for(const tg of targets){const g=targetGeom(tg,time);if(!g)continue;const tx=SX(g.cx),ty=SY((g.top+g.base)/2);if(tx>m*.4&&ty>m*.4&&tx<W-m*.4&&ty<Hh-m*.4)continue;
-    const cx=W/2,cy=Hh/2,ang=Math.atan2(ty-cy,tx-cx);let ex=Math.max(m,Math.min(W-m,tx)),ey=Math.max(m+40*dpr,Math.min(Hh-m-14*dpr,ty));if(!mini.hidden&&innerWidth>560&&ex<250*dpr&&ey>Hh-200*dpr)ex=250*dpr;
+    const cx=W/2,cy=Hh/2,ang=Math.atan2(ty-cy,tx-cx);let ex=Math.max(m,Math.min(W-m,tx)),ey=Math.max(m+40*dpr,Math.min(Hh-m-14*dpr,ty));if(miniShown()&&ex<250*dpr&&ey>Hh-200*dpr)ex=250*dpr;
     const r=16*dpr;ctx.save();ctx.translate(ex,ey);ctx.shadowColor='rgba(245,158,11,.8)';ctx.shadowBlur=12*dpr*pulse;ctx.fillStyle='rgba(20,16,8,.85)';ctx.beginPath();ctx.arc(0,0,r,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;ctx.strokeStyle='#fbbf24';ctx.lineWidth=2*dpr;ctx.stroke();
     ctx.rotate(ang);ctx.fillStyle='#fbbf24';ctx.beginPath();ctx.moveTo(r*.65,0);ctx.lineTo(-r*.35,-r*.45);ctx.lineTo(-r*.15,0);ctx.lineTo(-r*.35,r*.45);ctx.closePath();ctx.fill();ctx.restore();
     const lb=g.label.length>24?g.label.slice(0,23)+'…':g.label;ctx.font=`700 ${11*dpr}px ${UIF}`;const tw=ctx.measureText(lb).width;let lx=Math.max(8*dpr+tw/2,Math.min(W-8*dpr-tw/2,ex)),ly=ey+r+12*dpr;if(ly>Hh-10*dpr)ly=ey-r-12*dpr;
@@ -129,7 +129,9 @@ function render(){
 function emoteFor(n){if(n.id==='rex'&&!G.talked.rex&&G.level.id!=='inbox')return'q';if(n.chat&&!n.talking)return n.id==='sam'?'dots':null;return null}
 
 /* ---------- minimap ---------- */
-const mini=$('mini'),mg=mini.getContext('2d');let miniBase=null;const MSc=4;
+const mini=$('mini'),mg=mini.getContext('2d');
+/* hidden by M, or by CSS on narrow and short-landscape screens (game.css) */
+const miniShown=()=>!mini.hidden&&mini.offsetParent!==null;let miniBase=null;const MSc=4;
 function buildMini(){
   miniBase=mk(MW*MSc,MH*MSc);const g=miniBase.getContext('2d');
   for(let y=0;y<MH;y++)for(let x=0;x<MW;x++){const t=tileAt(x,y);if(isWallT(t)){g.fillStyle='#22202a'}else{const r=roomAt(x,y);g.fillStyle=r?r.c:'#555'}g.fillRect(x*MSc,y*MSc,MSc,MSc)}
@@ -238,7 +240,7 @@ function loop(now){
   steamT-=dt;if(steamT<=0){steamT=.22;particles.push({x:41+Math.random()*4,y:468,vx:(Math.random()-.5)*4,vy:-10-Math.random()*6,g:0,life:1.4,t:0,col:'rgba(255,255,255,.5)',sz:Math.random()<.5?1:2,fade:1})}
   for(let i=particles.length-1;i>=0;i--){const p=particles[i];p.t+=dt;p.vy+=(p.g||0)*dt;p.x+=p.vx*dt;p.y+=p.vy*dt;if(p.t>p.life)particles.splice(i,1)}
   if(marker){marker.t+=dt;if(marker.t>.5)marker=null}
-  render();updatePrompt();if(typeof Pad!=='undefined')Pad.frame();miniT-=dt;if(miniT<=0&&!mini.hidden){miniT=1/20;drawMini()}
+  render();updatePrompt();if(typeof Pad!=='undefined')Pad.frame();miniT-=dt;if(miniT<=0&&miniShown()){miniT=1/20;drawMini()}
 }
 
 /* =========================================================

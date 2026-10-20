@@ -242,6 +242,9 @@
 }
 @media (prefers-reduced-motion:reduce){#game,#game *{animation-duration:.01ms!important;transition-duration:.01ms!important}}
 
+/* Short landscape screens (phones on their side): no room for the minimap next to the controls. */
+@media (orientation:landscape) and (max-height:499px){#game #mini{display:none}}
+
 /* ---------- touch controls (js/touch.js): same HUD language, dark glass + thin light border + gold ---------- */
 #game .joy-zone{position:absolute;left:0;bottom:0;width:40%;height:50%;z-index:3;touch-action:none;-webkit-user-select:none;user-select:none}
 #game.lefty .joy-zone{left:auto;right:0}
