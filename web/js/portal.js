@@ -49,6 +49,7 @@ function initDemo(){
   Store.demoSessions=JSON.parse(JSON.stringify((PV_CONTENT.demo&&PV_CONTENT.demo.sessions)||{}));
   for(const[uid,list]of Object.entries(Store.demoSessions)){const pr=Store.progress[uid]=Store.progress[uid]||{levels:{},lastActive:now-dayMs};
     for(const v of list)pr.levels[v.level_id]={best:v.score,last:v.score,stars:v.stars,done:true,attempts:1,completedAt:now-dayMs,outcomes:v.outcomes}}
+  Store.demoTraining={};/* {uid: {sim_id: {attempts, best_pct, completed}}}: training played in this demo session */
   syncMine();Store.ready=true;startDemoLive();renderPortal();
 }
 function syncMine(){const id=Store.me.id;if(Store.mode==='demo'){Store.myMember=Store.members[id]||null;Store.myAssign=Store.assignments[id]||null;Store.myProg=Store.progress[id]||null}}
@@ -189,6 +190,7 @@ Live.on('*',ev=>{
     else if(ev.kind==='report_ready'&&$('game').hidden)UI.toast('Your skills report is ready',{description:'See where you are strong and what to practise next.'});
   }
   if(ev.kind==='report_ready'||ev.kind==='plan_updated'||ev.kind==='assigned'){delete reportCache[ev.user_id];if(drawerState&&drawerState.id===ev.user_id)setTimeout(()=>refreshDrawerTab(),120)}
+  if(ev.kind.startsWith('training_')){setTimeout(()=>refreshDrawerSims(ev.user_id),120);if(Store.mode!=='local'&&!Trainer.isOpen())scheduleRender()}
   if(Store.mode==='local'){clearTimeout(refreshTimer);refreshTimer=setTimeout(()=>loadLocalState().catch(()=>{}),60)}
   else if(Store.mode==='demo'&&ev.kind==='nudge_sent'&&!Store.isMgr)scheduleRender();
 });
@@ -213,6 +215,9 @@ function feedSentence(ev){
     case'nudge_sent':return['bell','',Store.isMgr?`Reminder sent to ${who}`:`Your manager sent you a reminder`];
     case'report_ready':return['skills',d.weakest?'caution':'safe',`${who}'s skills report is ready: ${d.weakest?`weakest is ${esc(d.weakest.name)}`:'no weak spots'}`];
     case'plan_updated':return['target','',`${who}'s training plan was updated`];
+    case'training_started':return['target','info',`${who} started training`];
+    case'training_progress':return d.mastered?['check','safe',`${who} mastered ${esc(d.title)} · <span class="num">${d.pct}%</span>`]:['target','caution',`${who} practised ${esc(d.title)} · <span class="num">${d.pct}%</span>`];
+    case'training_completed':return['certificate','safe',`${who} completed training: ${d.simulations} ${plural(d.simulations,'simulation')}.`];
   }
   return['circle','',`${who}: ${esc(ev.kind)}`];
 }
@@ -558,6 +563,7 @@ function profilePage(){
    ========================================================= */
 function bindView(view,page){
   view.querySelectorAll('[data-play]').forEach(b=>b.addEventListener('click',()=>{audioInit();startLevel(b.dataset.play,{graded:true})}));
+  view.querySelectorAll('[data-train]').forEach(b=>b.addEventListener('click',()=>Trainer.open(b.dataset.train)));
   view.querySelectorAll('[data-art]').forEach(el=>el.append(modArt(levelById(el.dataset.art))));
   view.querySelectorAll('[data-signout]').forEach(b=>b.addEventListener('click',logoutLocal));
   const li=$('leftyIn');li&&li.addEventListener('change',()=>{Pad.setLefty(li.checked);UI.toast(li.checked?'Left-handed controls on':'Left-handed controls off',{description:li.checked?'Joystick on the right, action button on the left.':'Joystick on the left, action button on the right.'})});

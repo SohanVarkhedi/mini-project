@@ -111,8 +111,23 @@ const PVRules=(()=>{
     ['certificate','Certificate','A certificate your manager can verify when you pass the final test.']];
   /* program: {levels, due, pass_mark, allow_watch_training, created_at}
      sessions: [{level_id, purpose, started_at, finished_at|null, score, decisions:[...]}]
-     planOverride: skills list if a manager edited the plan, else null */
-  function journey(content,skillsMeta,program,sessions,planOverride=null,today=null){
+     planOverride: skills list if a manager edited the plan, else null
+     trainingProgress: {sim_id: {attempts, best_pct, completed}} for this program */
+  function simsForSkills(simsMeta,skillIds){const by={};for(const s of simsMeta)(by[s.skill]=by[s.skill]||[]).push(s);return skillIds.flatMap(sk=>by[sk]||[])}
+  function trainingStatus(simsMeta,progress,skillIds){
+    const sims=simsForSkills(simsMeta,skillIds).map(s=>{const r=progress[s.id];return{id:s.id,skill:s.skill,title:s.title,minutes:s.minutes,rounds:s.rounds,
+      attempts:r?r.attempts:0,best_pct:r?r.best_pct:0,mastered:!!(r&&r.completed)}});
+    return{sims,mastered:sims.filter(x=>x.mastered).length,total:sims.length};
+  }
+  function trainingStage(training,planIds,names,hasReport){
+    if(!hasReport)return['locked','Short simulations for the skills your report flags.'];
+    const sims=training.sims;if(!sims.length)return['done',"No weak spots, so there's nothing you have to practise."];
+    const n=sims.length,done=training.mastered;
+    if(done===n)return['done',`All ${n} simulation${n===1?'':'s'} mastered.`];
+    if(sims.some(x=>x.attempts))return['in_progress',`${done} of ${n} simulations mastered.`];
+    return['available',`${n} short simulation${n===1?'':'s'} for ${planIds.slice(0,3).map(s=>names[s]||s).join(', ')}. About ${sims.reduce((a,x)=>a+x.minutes,0)} minutes in all.`];
+  }
+  function journey(content,skillsMeta,program,sessions,planOverride=null,today=null,trainingProgress={}){
     if(!program)return{program:null,levels:[],stages:STAGES.map(([id,title,d])=>({id,title,state:'locked',description:d})),current:null,next:null,report:null,weakest:null,plan:null};
     const level=id=>content.levels.find(l=>l.id===id);
     const since=sessions.filter(s=>s.purpose==='baseline'&&s.started_at>=program.created_at&&program.levels.includes(s.level_id));
@@ -126,22 +141,72 @@ const PVRules=(()=>{
       report=buildReport(content,ds,skillsMeta);report.levels=Object.fromEntries(program.levels.map(l=>[l,firsts[l].score]))}
     const planIds=report?(planOverride||planSkills(report,program.allow_watch_training)):[];
     const names=Object.fromEntries(skillsMeta.map(s=>[s.id,s.name]));
+    const training=report?trainingStatus(content.training||[],trainingProgress||{},planIds):null;
     const st={game:[gameDone?'done':(nDone||started.size)?'in_progress':'available',`${nDone} of ${program.levels.length} levels played.`],
       report:[report?'done':'locked',report?'Ready.':"Unlocks when you've played every level once."],
-      training:!report?['locked','Short simulations for the skills your report flags.']
-        :planIds.length?['available',`${planIds.length} skill${planIds.length===1?'':'s'} to practise: ${planIds.slice(0,3).map(s=>names[s]||s).join(', ')}. Simulations arrive in the next update.`]
-        :['done',"No weak spots, so there's nothing you have to practise."],
-      test:['locked',`Unseen scenarios, no hints. Pass mark ${program.pass_mark}%. Arrives in a later update.`],
+      training:trainingStage(training,planIds,names,!!report),
+      test:['locked',`Unseen scenarios, no hints. Pass mark ${program.pass_mark}%. Arrives in the next update.`],
       certificate:['locked','Pass the final test to earn a certificate your manager can verify.']};
     const stages=STAGES.map(([id,title,about])=>({id,title,state:st[id][0],description:st[id][1],about}));
     const current=(stages.find(s=>s.state!=='done')||{}).id||null;let nx=null;
     if(current==='game'){const L=level(next);nx={stage:'game',action:'play',level_id:next,label:`${started.has(next)?'Resume':'Start'} Level ${L.n} · ${L.title}`}}
-    else if(current==='training')nx={stage:'training',action:'plan',label:'Start your training plan'};
-    else if(current==='test')nx={stage:'test',action:null,label:'The final test opens in a later update'};
+    else if(current==='training')nx={stage:'training',action:'plan',label:training.sims.some(x=>x.attempts)?'Continue your training plan':'Start your training plan'};
+    else if(current==='test')nx={stage:'test',action:null,label:'Final test: arrives in the next update'};
     const todayISO=today||new Date().toISOString().slice(0,10);
-    return{program,levels,stages,current,next:nx,report,weakest:report?report.weakest:null,plan:report?{skills:planIds}:null,
+    return{program,levels,stages,current,next:nx,report,weakest:report?report.weakest:null,plan:report?{skills:planIds}:null,training,
       overdue:!!(program.due&&!gameDone&&program.due<todayISO)};
   }
-  return{buildReport,summary,habitAdvice,planSkills,journey,band,decisionPoints,CUE_PHRASES};
+  /* ---------- training rounds (same rules as phishverse/training.py) ---------- */
+  const MASTERY=80;
+  function shuffled(n,rng,on){const p=[...Array(n).keys()];if(on)for(let i=n-1;i>0;i--){const j=Math.floor(rng()*(i+1));[p[i],p[j]]=[p[j],p[i]]}return p}
+  function buildAttempt(sim,shuffle,rng=Math.random){
+    return shuffled(sim.rounds.length,rng,shuffle).map(i=>{const r=sim.rounds[i],e={r:i};
+      if(['realfake','verify','door'].includes(r.type))e.options=shuffled(r.options.length,rng,shuffle);
+      else if(r.type==='sort')e.items=shuffled(r.items.length,rng,shuffle);
+      else if(r.type==='mfa')e.prompts=shuffled(r.prompts.length,rng,shuffle);
+      else if(r.type==='call')e.choices=Object.fromEntries(Object.entries(r.nodes).map(([id,n])=>[id,shuffled(n.choices.length,rng,shuffle)]));
+      return e});
+  }
+  function clientRound(sim,e){
+    const r=sim.rounds[e.r],out={id:r.id,type:r.type,prompt:r.prompt};
+    if(r.type==='spot'){out.artifact=r.artifact;out.regions=r.regions.map(g=>({id:g.id}))}
+    else if(['realfake','verify','door'].includes(r.type)){out.options=e.options.map(i=>({text:r.options[i].text}));if(r.type==='door')Object.assign(out,{npc:r.npc,place:r.place,lines:r.lines});if(r.request)out.request=r.request}
+    else if(r.type==='sort')out.items=e.items.map(i=>({id:r.items[i].id,label:r.items[i].label,detail:r.items[i].detail||''}));
+    else if(r.type==='mfa')out.prompts=e.prompts.map(i=>{const p=r.prompts[i];return{app:p.app,loc:p.loc,time:p.time,context:p.context}});
+    else if(r.type==='call'){out.caller=r.caller;out.nodes=Object.fromEntries(Object.entries(r.nodes).map(([id,n])=>[id,{say:n.say,choices:e.choices[id].map(i=>{const c=n.choices[i];return'next'in c?{text:c.text,next:c.next}:{text:c.text,end:true}})}]))}
+    return out;
+  }
+  function toCanonical(sim,e,answer){
+    const r=sim.rounds[e.r],t=r.type,idx=(a,n)=>{if(typeof a!=='number'||!Number.isInteger(a)||a<0||a>=n)throw new Error('bad index');return a};
+    if(t==='spot'){const valid=new Set(r.regions.map(g=>g.id));if(!Array.isArray(answer)||!answer.every(a=>valid.has(a)))throw new Error('bad regions');return[...new Set(answer)].sort()}
+    if(['realfake','verify','door'].includes(t))return e.options[idx(answer,e.options.length)];
+    if(t==='sort'){const ids=r.items.map(i=>i.id);if(!answer||Object.keys(answer).length!==ids.length||!ids.every(id=>['safe','report'].includes(answer[id])))throw new Error('sort every item');return{...answer}}
+    if(t==='mfa'){if(!Array.isArray(answer)||answer.length!==r.prompts.length)throw new Error('answer every prompt');const out=Array(r.prompts.length);answer.forEach((a,shown)=>{out[e.prompts[shown]]=a});return out}
+    if(t==='call'){let node='start';const path=[];for(const a of answer){const ch=r.nodes[node].choices,i=e.choices[node][idx(a,ch.length)],c=ch[i];path.push(i);if('end'in c)return path;node=c.next}throw new Error("the call hasn't ended")}
+    throw new Error('unknown type');
+  }
+  function gradeRound(r,ans){
+    const t=r.type;let score,detail;
+    if(t==='spot'){const flags=new Set(r.regions.filter(g=>g.flag).map(g=>g.id)),tapped=new Set(ans),found=[...flags].filter(f=>tapped.has(f)).length,wrong=[...tapped].filter(x=>!flags.has(x)).length;
+      score=Math.max(0,(found-wrong)/flags.size);detail={regions:r.regions.map(g=>({id:g.id,label:g.label,flag:g.flag,why:g.why,tapped:tapped.has(g.id)})),found,missed:flags.size-found,wrong}}
+    else if(['realfake','verify','door'].includes(t)){const key=t==='realfake'?'real':'correct',right=r.options.findIndex(o=>o[key]);score=ans===right?1:0;
+      detail={chose:ans,right,options:r.options.map(o=>({text:o.text,right:!!o[key],note:o.note||''}))}}
+    else if(t==='sort'){const rows=r.items.map(i=>({id:i.id,label:i.label,safe:i.safe,chose:ans[i.id],right:(ans[i.id]==='safe')===i.safe,why:i.why}));score=rows.filter(x=>x.right).length/rows.length;detail={items:rows}}
+    else if(t==='mfa'){const rows=r.prompts.map((p,i)=>{const a=ans[i];return{answer:p.answer,chose:a,score:a===p.answer?1:(p.answer==='report'&&a==='deny'?.5:0),why:p.why,app:p.app,loc:p.loc,time:p.time}});
+      score=rows.reduce((s,x)=>s+x.score,0)/rows.length;detail={prompts:rows}}
+    else if(t==='call'){let node='start',c=null;for(const i of ans){c=r.nodes[node].choices[i];node=c.next}score=c.end==='safe'?1:0;detail={outcome:c.end,why:c.why}}
+    score=Math.round(score*1e4)/1e4;
+    return{score,correct:score>=1,explain:r.explain,detail};
+  }
+  function shownDetail(r,e,res){
+    const d={...res.detail};
+    if(['realfake','verify','door'].includes(r.type)){const p=e.options;d.chose=p.indexOf(d.chose);d.right=p.indexOf(d.right);d.options=p.map(i=>res.detail.options[i])}
+    else if(r.type==='sort'){const order=e.items.map(i=>r.items[i].id);d.items=[...d.items].sort((a,b)=>order.indexOf(a.id)-order.indexOf(b.id))}
+    else if(r.type==='mfa')d.prompts=e.prompts.map(i=>res.detail.prompts[i]);
+    return{...res,detail:d};
+  }
+  const attemptPct=scores=>scores.length?roundHalfUp(100*scores.reduce((a,b)=>a+b,0)/scores.length):0;
+  return{buildReport,summary,habitAdvice,planSkills,journey,band,decisionPoints,CUE_PHRASES,
+    MASTERY,simsForSkills,buildAttempt,clientRound,toCanonical,gradeRound,shownDetail,attemptPct};
 })();
 if(typeof module!=='undefined')module.exports=PVRules;

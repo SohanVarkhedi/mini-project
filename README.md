@@ -26,10 +26,12 @@ phishverse-local/
 │   ├── connect.py       # LAN address + QR code for the Connect a device panel
 │   ├── journey.py       # programs and the journey: game, report, training, test, certificate
 │   ├── skills.py        # skills report scoring (strong areas, weak spots, habits)
+│   ├── training.py      # training simulations: validation, shuffling, grading
+│   ├── training_api.py  # training routes (the server grades every round)
 │   ├── demo.py          # sample plays behind the demo-mode skills reports
 │   └── seed.py          # default manager + --seed-demo sample data
 ├── migrations/          # 0001_initial.sql, 0002_..., applied in order at startup
-├── content/             # levels.json (scenarios), skills.json, world_refs.json (generated)
+├── content/             # levels.json (scenarios), skills.json, training.json (simulations), world_refs.json (generated)
 ├── scripts/             # build_content.py, validate_content.py, gen_world_refs.py
 ├── tests/               # pytest: API tests + tests/e2e Playwright smoke test
 ├── docs/                # UI_GUIDE.md, MULTI_DEVICE.md (laptop + phone setup), ROADMAP_PROMPTS.md
@@ -43,15 +45,19 @@ phishverse-local/
     │   ├── base.css       # reset + portal typography
     │   ├── components.css # buttons, fields, tables, drawer, toast, ...
     │   ├── portal.css     # sign-in, manager and employee layouts
-    │   └── game.css       # the game's styles (unchanged look)
+    │   ├── game.css       # the game's styles (unchanged look)
+    │   └── trainer.css    # training simulations (inside the game's dark look)
     └── js/
         ├── core.js      # map, characters, props, office artwork
         ├── content-data.js # generated from content/*.json (lets demo mode work from a file)
+        ├── training-data.js # generated: simulations WITH answers, loaded only in demo mode
         ├── content.js   # NPCs and object placement
         ├── engine.js    # movement, rendering, highlights, dialog, encounters, audio
         ├── touch.js     # on-screen joystick and action button for touch screens
         ├── ui.js        # design-system helpers: toast, drawer, confirm, inspected text, theme
         ├── live.js      # live updates: EventSource with reconnect and a polling fallback
+        ├── rules.js     # journey, report and grading rules for demo mode (same as the server)
+        ├── trainer.js   # the training simulation player
         ├── journey.js   # journey stages, skills report, training plan
         └── portal.js    # manager/employee portal + data layer
 ```
@@ -102,8 +108,11 @@ Every employee follows the same path, shown on their **Journey** page:
    weak spots, the situations that revealed them (and the safer choice), the pressure tactics
    that worked on them, and their habits. Managers see the same report in the person's panel,
    live.
-3. **Training**: a personal plan of the skills to practise (simulations arrive in a later update).
-   Managers can adjust the plan.
+3. **Training**: one short simulation (2 to 4 minutes, 5 to 7 rounds) for each skill in their
+   plan, weakest first. Seven kinds of round: spot the red flags, real or fake, sort (swipe),
+   phone call, check it safely, someone at the door, and sign-in prompts. Score 80% to master a
+   simulation; below that, **Try again** replays it in a new order. Managers can adjust the plan
+   and watch each simulation's tries and best score live in the person's panel.
 4. **Final test** and 5. **Certificate**: coming in later updates.
 
 Managers use **Assign program** on the overview to choose levels, a due date, a note, the
@@ -145,6 +154,8 @@ Or pick the manager login before the first run with environment variables
    shows it in **Live activity** within a second or two, without a refresh.
 6. Play the second level. The results screen offers **See your skills report**, and the
    manager's people table shows the employee's weakest skill.
+7. Open **Start your training plan** and play the simulations. With the employee's panel open
+   on the **Training plan** tab, the manager sees each one move to **Mastered** as it happens.
 
 ## Use it from your phone (same Wi-Fi)
 
@@ -248,7 +259,11 @@ python scripts/validate_content.py   # check ids, actions, tags and text lengths
 
 Each scenario lists the skills it tests (`content/skills.json`), the pressure cues it uses,
 a difficulty from 1 to 3, and a severity from 1 to 3 on every action that ends in a
-compromise. The server won't start if the content is invalid. If you move objects or people
+compromise. The server won't start if the content is invalid.
+
+Training simulations live in `content/training.json` (one per skill; the same two commands
+rebuild and check them). The answers stay on the server: `content-data.js` only gets titles and
+round counts, and `training-data.js` (with answers) is loaded only by demo mode. If you move objects or people
 in `web/js/content.js`, run `python scripts/gen_world_refs.py` too.
 
 ### Database changes

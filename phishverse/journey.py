@@ -195,14 +195,9 @@ def journey(conn, content_, user):
                   f"{n_done} of {len(prog['levels'])} levels played.")
     st["report"] = ("done" if report else "locked",
                     "Ready." if report else "Unlocks when you've played every level once.")
-    if not report:
-        st["training"] = ("locked", "Short simulations for the skills your report flags.")
-    elif plan_skill_ids:
-        st["training"] = ("available", f"{len(plan_skill_ids)} skill{'' if len(plan_skill_ids) == 1 else 's'} to practise: "
-                                       f"{', '.join(names.get(s, s) for s in plan_skill_ids[:3])}. Simulations arrive in the next update.")
-    else:
-        st["training"] = ("done", "No weak spots, so there's nothing you have to practise.")
-    st["test"] = ("locked", f"Unseen scenarios, no hints. Pass mark {prog['pass_mark']}%. Arrives in a later update.")
+    training = training_status(conn, content_, user["id"], prog["id"], plan_skill_ids) if report else None
+    st["training"] = training_stage(training, plan_skill_ids, names, bool(report))
+    st["test"] = ("locked", f"Unseen scenarios, no hints. Pass mark {prog['pass_mark']}%. Arrives in the next update.")
     st["certificate"] = ("locked", "Pass the final test to earn a certificate your manager can verify.")
     stages = [{"id": i, "title": t, "state": st[i][0], "description": st[i][1], "about": d} for i, t, d in STAGES]
     current = next((s["id"] for s in stages if s["state"] != "done"), None)
@@ -213,13 +208,44 @@ def journey(conn, content_, user):
         verb = "Resume" if next_level in started else "Start"
         nxt = {"stage": "game", "action": "play", "level_id": next_level, "label": f"{verb} Level {L['n']} · {L['title']}"}
     elif current == "training":
-        nxt = {"stage": "training", "action": "plan", "label": "Start your training plan"}
+        started_training = any(x["attempts"] for x in training["sims"])
+        nxt = {"stage": "training", "action": "plan", "label": "Continue your training plan" if started_training else "Start your training plan"}
     elif current == "test":
-        nxt = {"stage": "test", "action": None, "label": "The final test opens in a later update"}
+        nxt = {"stage": "test", "action": None, "label": "Final test: arrives in the next update"}
     return {"program": prog, "levels": levels, "stages": stages, "current": current, "next": nxt,
             "report_id": report["id"] if report else None, "weakest": report["weakest"] if report else None,
             "plan": {"skills": plan_skill_ids, "edited_by": plan["edited_by"], "edited_at": plan["edited_at"]} if plan else None,
+            "training": training,
             "overdue": bool(prog["due"] and not game_done and prog["due"] < time.strftime("%Y-%m-%d"))}
+
+
+def training_status(conn, content_, user_id, program_id, skill_ids):
+    """The plan's simulations (weak skills first, then Watch) with progress."""
+    from .training import sims_for_skills
+    rows = {r["sim_id"]: r for r in conn.execute("SELECT * FROM training_progress WHERE user_id=? AND program_id=?", (user_id, program_id))}
+    sims = []
+    for s in sims_for_skills(content_.training, skill_ids):
+        r = rows.get(s["id"])
+        sims.append({"id": s["id"], "skill": s["skill"], "title": s["title"], "minutes": s["minutes"], "rounds": len(s["rounds"]),
+                     "attempts": r["attempts"] if r else 0, "best_pct": r["best_pct"] if r else 0,
+                     "mastered": bool(r and r["completed_at"])})
+    return {"sims": sims, "mastered": sum(x["mastered"] for x in sims), "total": len(sims)}
+
+
+def training_stage(training, plan_skill_ids, names, has_report):
+    """(state, description) of the Training stage."""
+    if not has_report:
+        return ("locked", "Short simulations for the skills your report flags.")
+    sims = training["sims"]
+    if not sims:
+        return ("done", "No weak spots, so there's nothing you have to practise.")
+    n, done = len(sims), training["mastered"]
+    if done == n:
+        return ("done", f"All {n} simulation{'' if n == 1 else 's'} mastered.")
+    if any(x["attempts"] for x in sims):
+        return ("in_progress", f"{done} of {n} simulations mastered.")
+    skills = ", ".join(names.get(sk, sk) for sk in plan_skill_ids[:3])
+    return ("available", f"{n} short simulation{'' if n == 1 else 's'} for {skills}. About {sum(x['minutes'] for x in sims)} minutes in all.")
 
 
 def journey_summary(j):
@@ -230,7 +256,8 @@ def journey_summary(j):
     played = sum(1 for l in j["levels"] if l["state"] == "done")
     return {"current": j["current"], "game": game["state"], "played": played, "levels": len(j["levels"]),
             "weakest": j["weakest"], "report_id": j["report_id"], "overdue": j["overdue"],
-            "plan": j["plan"]["skills"] if j["plan"] else None}
+            "plan": j["plan"]["skills"] if j["plan"] else None,
+            "training": {"mastered": j["training"]["mastered"], "total": j["training"]["total"]} if j.get("training") else None}
 
 
 # ---------------------------------------------------------------- routes

@@ -18,6 +18,7 @@ from playwright.sync_api import expect  # noqa: E402
 from werkzeug.serving import make_server  # noqa: E402
 
 from phishverse import create_app  # noqa: E402
+from trainer_play import Touch, play_sim  # noqa: E402
 
 pytestmark = pytest.mark.e2e
 
@@ -215,7 +216,41 @@ def test_manager_and_employee_on_two_devices(server_url, desktop, phone):
     emp.locator('.bottom-nav a[href="#journey"]').tap()
     expect(emp.locator('.stage[data-current]')).to_contain_text("Training")
     expect(emp.locator(".next-marker")).to_have_count(1)
-    print(f"  live lag: finish -> manager feed {feed_lag:.2f}s, nudge -> phone toast {nudge_lag:.2f}s, report -> manager drawer {report_lag:.2f}s")
+
+    # Stage 5A: Kavya masters her training plan on the phone by touch; the manager's drawer updates live.
+    mgr.goto(server_url + "#people")
+    mgr.locator("tr[data-person]", has_text=EMPLOYEE["name"]).locator("[data-details]").click()
+    mgr.locator('[data-dtab="plan"]').click()
+    sims = emp.evaluate("() => myJourney().training.sims.map(s => s.id)")
+    assert len(sims) >= 2  # two weak skills (links, sender checks), one simulation each
+    expect(mgr.locator("[data-sims] li")).to_have_count(len(sims))
+    expect(mgr.locator(f'[data-sim="{sims[0]}"]')).to_contain_text("Not started")
+    emp.locator('.stage a[href="#plan"]').first.tap()
+    touch, sim_lags = Touch(emp), []
+    for sim in sims:
+        emp.locator(f'[data-train="{sim}"]').tap()
+        play_sim(emp, sim, touch)
+        expect(emp.locator(".tr-end-h")).to_have_text("Training complete" if sim == sims[-1] else "Mastered")
+        done_at = time.time()
+        expect(mgr.locator(f'[data-sim="{sim}"]')).to_contain_text("Mastered", timeout=2000)
+        sim_lags.append(time.time() - done_at)
+        emp.locator("[data-continue]").tap()
+        expect(emp.locator(f'.sim-row:has([data-train="{sim}"])')).to_contain_text("Mastered")
+    expect(mgr.locator("[data-sims]")).to_contain_text("Training is done")
+    mgr.keyboard.press("Escape")
+    expect(krow.locator('[data-col="status"]')).to_contain_text("Final test", timeout=2000)
+    mgr.goto(server_url + "#overview")
+    expect(mgr.locator("#feed .feed-item").first).to_contain_text(f"Kavya completed training: {len(sims)} simulations.")
+    expect(emp.locator(".plan-done")).to_contain_text("Training done")
+    emp.locator('.bottom-nav a[href="#journey"]').tap()
+    expect(emp.locator('.stage[data-current]')).to_contain_text("Final test")
+    expect(emp.locator(".next-marker")).to_have_count(1)
+    conn = sqlite3.connect(DB["path"])
+    rows = conn.execute("SELECT sim_id, attempts, best_pct, completed_at FROM training_progress").fetchall()
+    conn.close()
+    assert sorted(r[0] for r in rows) == sorted(sims) and all(r[1] == 1 and r[2] == 100 and r[3] for r in rows)
+    print(f"  live lag: finish -> manager feed {feed_lag:.2f}s, nudge -> phone toast {nudge_lag:.2f}s, report -> manager drawer {report_lag:.2f}s, "
+          f"simulation -> manager drawer {max(sim_lags):.2f}s")
 
     assert mgr_errors == []
     assert emp_errors == []

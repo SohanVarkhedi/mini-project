@@ -60,11 +60,16 @@ phishverse/journey.py Programs (one active per person; re-assign -> old one 'rep
                      /api/people/<uid>/journey|report|plan (manager; PUT plan), PUT|DELETE /api/programs/<uid>
                      (/api/assignments/<uid> is an alias).
 phishverse/skills.py Pure scoring: build_report(), summary(), habit_advice(), plan_skills(). Unit-tested by hand.
+phishverse/training.py Simulations (content/training.json): validate(), build_attempt() (shuffle on retries), client_round()
+                     (no answers), to_canonical(), grade_round(), shown_detail(), attempt_pct(), MASTERY=80.
+phishverse/training_api.py Blueprint: /api/training, /api/training/<sim>/start|rounds|complete, /api/people/<uid>/training.
 phishverse/demo.py   DEMO_PLAYS -> sample sessions in content-data.js (PV_CONTENT.demo); the browser builds their reports.
 phishverse/seed.py   ensure_defaults() (first manager + config), seed_demo() (records real sessions + decisions via
                      record_play()), set_manager_password().
 content/levels.json  Levels, tasks, scenarios (enc) and the outcome scale. Edit content here, never in JS.
 content/skills.json  The 9 skills (id, name, description, icon). Scenarios tag 1-2 of them.
+content/training.json  One simulation per skill: intro, recap (3 habits), sources (org + title, no URLs), 5-7 rounds of
+                     spot|realfake|sort|call|verify|door|mfa (schemas checked by training.validate()).
 content/world_refs.json  GENERATED: object/NPC ids in the JS world (+ which levels they appear in).
 scripts/             build_content.py (-> web/js/content-data.js), validate_content.py, gen_world_refs.py (Chromium).
 migrations/          NNNN_name.sql, applied in order at startup, tracked in schema_version.
@@ -83,7 +88,10 @@ web/css/game.css     Game styles, all scoped to #game, which carries its own old
 web/js/core.js       Map grid + rooms, helpers (H/S sprite painters, outline, hash), characters
                      (charFrame/sheet, 16x24 chibi, 4 dirs x 4 frames + sit), hi-res props (PROPS),
                      static world drawing (drawWorld) at R=2 (32 px per tile).
-web/js/content-data.js  GENERATED from content/*.json: window.PV_CONTENT = {outcomes, levels, skills}. Commit it.
+web/js/content-data.js  GENERATED from content/*.json: window.PV_CONTENT = {outcomes, levels, skills, training (metadata
+                     only, never answers), demo}. Commit it.
+web/js/training-data.js GENERATED: PV_TRAINING_FULL (simulations WITH answers). Demo/live only, loaded on demand by
+                     trainer.js; never load it in local mode.
 web/js/content.js    World objects (placeObjects/addObj/desk), NPC palettes (P) + NPCDEF. OUT and LEVELS come from
                      PV_CONTENT. After editing objects/NPCs here: python scripts/gen_world_refs.py.
 web/js/engine.js     Actors, level state G, rendering + quest highlights, minimap, input/pathfinding,
@@ -101,13 +109,17 @@ web/js/live.js       Live.start(lastId)/stop()/on(kind|'*', fn)/onStatus(fn)/sim
                      40 s watchdog, Last-Event-ID resume, polling fallback (/api/activity?after=) every 10 s.
 web/js/rules.js      PVRules (no DOM): buildReport/summary/habitAdvice/planSkills/journey, a line-by-line mirror of
                      skills.py + journey.journey(). Used by demo and live modes (and loadable in Node).
+web/js/trainer.js    Trainer.open(simId): the simulation player, full-screen inside #game (game dark look, Ada's say()
+                     dialog, artHTML encounter art, sceneCanvas NPC sprites). Local: server grades each round; demo/live:
+                     PVRules grades. Test hook Trainer.current() (the round on screen). CSS: web/css/trainer.css.
 web/js/journey.js    clientJourney() (runs PVRules on recorded sessions), journeyStages(), reportHTML() (employee +
-                     manager drawer), reportPage() (#skills), planPage() (#plan), drawer Skills report / Training plan tabs.
+                     manager drawer), reportPage() (#skills), planPage() (#plan: simulations), drawer Skills report /
+                     Training plan tabs (drawerSims() updates live on training_* events).
 web/js/portal.js     Store + data modes, hash routing, shells, pages, sign-in, live feed/nudges/connect panel, boot.
                      Manager: #overview #people #programs #reports #settings #training. Employee: #journey #skills
                      #certificates #profile. Shell renders once per role; only #view re-renders on data refresh.
 ```
-Scripts are **classic scripts sharing globals**, loaded in order core → content-data → content → engine → touch → ui → live → rules → journey → portal.
+Scripts are **classic scripts sharing globals**, loaded in order core → content-data → content → engine → touch → ui → live → rules → trainer → journey → portal.
 Do not introduce a bundler, framework or npm build unless a task explicitly asks for it.
 
 ## Data modes (portal.js `Store.mode`)
@@ -126,15 +138,22 @@ Sessions are owner-only: anyone else gets 404. Duplicate decision → 409; decis
 `GET /api/events` (SSE: managers get every event, employees only events about themselves; `ping` heartbeat every
 EVENTS_HEARTBEAT=15 s; resume with Last-Event-ID or ?last_id=) · `GET /api/activity?limit=|after=` ·
 `POST /api/nudges {user_id, message≤140}` (manager; one per person per 10 min → 429) ·
-`GET /api/connect` · `GET /api/connect/qr.svg` (manager). Event kinds today: joined, assigned, unassigned,
-level_started, level_finished (score), nudge_sent. Add new kinds to events.KINDS and record them with record_event.
+`GET /api/connect` · `GET /api/connect/qr.svg` (manager) ·
+`GET /api/training` · `POST /api/training/<sim>/start` → attempt_id + rounds without answers (404 if not in your plan;
+retries shuffle rounds and options) · `POST /api/training/<sim>/rounds {attempt_id, round, answer}` → score, correct,
+explain, detail (owner only, 404 otherwise; 409 if answered/finished; 400 bad answer) · `POST /api/training/<sim>/complete
+{attempt_id}` → pct, mastered (>= 80%), best_pct, attempts, plan_done, plan_finished · `GET /api/people/<uid>/training`
+(manager). Event kinds today: joined, assigned, unassigned, level_started, level_finished (score), nudge_sent,
+report_ready, plan_updated, training_started, training_progress (sim, pct, mastered), training_completed (simulations). Add new kinds to events.KINDS and record them with record_event.
 Tables (see `migrations/`): `schema_version(version,name,applied_at)`, `users(id,name,email,pw_hash,role manager|employee,dept,joined_at)`, `assignments(user_id,data JSON)`,
 `progress(user_id,data JSON)` (summary cache rebuilt on finish), `config(id=1,data JSON)`,
 `play_sessions(id,user_id,level_id,purpose baseline|practice|test,started_at,finished_at,client_version,score,stars)`,
 `decisions(id,session_id,task_id,action_index,outcome,severity,inspected_json,n_inspections,response_ms,created_at)`,
 `activity(id,user_id,kind,data_json,created_at)` (id = SSE event id),
 `programs(id,user_id,levels_json,due,note,pass_mark,max_test_attempts,allow_watch_training,created_by,created_at,status)`,
-`reports(id,program_id,user_id,data_json,created_at)` (never changes), `training_plans(id,program_id,skills_json,...)`.
+`reports(id,program_id,user_id,data_json,created_at)` (never changes), `training_plans(id,program_id,skills_json,...)`,
+`training_progress(user_id,program_id,sim_id,attempts,best_pct,completed_at)`,
+`training_attempts(id,user_id,program_id,sim_id,plan_json,answers_json,started_at,finished_at,pct)`.
 `assignments` is legacy (migrated into programs by 0004); /api/state still returns `assignments` built from programs,
 plus `myJourney` and (manager) `journeys` {uid: summary}.
 Progress per level = finished baseline + practice sessions: best score, last, attempts, outcomes of the best attempt.
@@ -167,6 +186,16 @@ names a cue that was present in the weakest skill's slips. Training plan = Weak 
 **The rules live twice: phishverse/skills.py + journey.py (server) and web/js/rules.js (demo/live). Change both
 together, in the same commit.** tests/e2e/test_parity.py runs fixture histories through both and requires identical
 journeys, next actions, scores, bands, cues, habits and summary text.
+
+## Training simulations (Stage 5A)
+One simulation per skill in the plan (Weak first, then Watch). Spot: score = max(0, (found - wrong taps) / flags).
+Sort: share of items right. MFA: share of prompts right; "deny" on a fake prompt = half credit (report is best). Call: 1
+for the safe ending, else 0. Realfake/verify/door: 1 or 0. Attempt % = mean round score x 100 (rounded half up);
+mastered at >= 80%; best % and attempts are kept per program. Training is done when every plan simulation is mastered;
+the journey then moves to the final test. Grading lives in training.py AND rules.js: **change both together**;
+test_parity.py checks every round with right, wrong and partial answers. Spot artifacts reuse the encounter art schema
+with `[[region_id|text]]` markers (plus the built-in addr/link/attach/loc regions). tests/e2e/trainer_play.py plays a
+simulation by touch or keyboard for the e2e tests.
 
 ## Conventions
 - Game visuals are locked: the **dialog box design** (round portrait, green caps name, page dots,
@@ -213,6 +242,7 @@ page error or console error. Test hooks on `window`: `G` (read-only getter for t
 `showResults(summary())`. Add a test with every new endpoint or rule (auth, role check, validation).
 
 ## Roadmap
-See `docs/ROADMAP_PROMPTS.md` (stages 0–12, run in order). Stages 0–4 are done (foundation, design system, content data + decisions, live multi-device sync, journey + skills report).
+See `docs/ROADMAP_PROMPTS.md` (stages 0–12, run in order). Stages 0–5A are done (foundation, design system, content data + decisions, live multi-device sync, journey + skills report,
+training simulations).
 Multi-device setup and troubleshooting: docs/MULTI_DEVICE.md. Multi-company (B2B) features from
 PRODUCT_SPEC_v1 are deliberately out of scope until after the demo.

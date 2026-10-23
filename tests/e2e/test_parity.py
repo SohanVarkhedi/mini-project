@@ -114,3 +114,111 @@ def test_python_and_js_agree(page, tmp_path, name):
         assert py["report"]["weak"] and py["report"]["cues"] and py["current"] == "training"
     if name == "replays after a report":
         assert py["report"]["levels"]["orientation"] == 40  # the first try (1 + 0 + .6 + 0) / 4, not the perfect replay
+
+
+# ---------------------------------------------------------------- training: journey stage + grading
+TRAINING_FIXTURES = {
+    "training started": {"levels": ["orientation"], "sessions": [S("orientation", MIXED_L1, 10)],
+                         "training": {"sim_physical_1": {"attempts": 1, "best_pct": 60, "completed": False}}},
+    "training mastered": {"levels": ["orientation"], "sessions": [S("orientation", MIXED_L1, 10)],
+                          "training": "all"},
+}
+
+
+def python_journey_with_training(tmp_path, content, fx, sessions):
+    from phishverse.journey import active_program
+    app = create_app({"DB_PATH": str(tmp_path / "pt.db"), "TESTING": True})
+    conn = db.connect(app.config["DB_PATH"])
+    conn.execute("INSERT INTO users (id,name,email,pw_hash,role,dept,joined_at) VALUES ('u_p','Pat','p@x.y','x','employee','',1)")
+    create_program(conn, "u_p", fx["levels"], "2099-12-31", "", created_at=PROGRAM_START)
+    for s in sessions:
+        conn.execute("INSERT INTO play_sessions (id,user_id,level_id,purpose,started_at,finished_at,score,stars) VALUES (?,?,?,?,?,?,?,1)",
+                     (s["id"], "u_p", s["level_id"], s["purpose"], s["started_at"], s["finished_at"], s["score"]))
+        for d in s["decisions"]:
+            conn.execute("INSERT INTO decisions (session_id,task_id,action_index,outcome,severity,inspected_json,n_inspections,response_ms,created_at)"
+                         " VALUES (?,?,?,?,?,'[]',?,?,1)", (s["id"], d["task_id"], d["action_index"], d["outcome"], d["severity"],
+                                                          d["n_inspections"], d["response_ms"]))
+    user = conn.execute("SELECT * FROM users WHERE id='u_p'").fetchone()
+    j = journey(conn, content, user)  # writes the report + plan
+    pid = active_program(conn, "u_p")["id"]
+    progress = fx["training"]
+    if progress == "all":
+        progress = {s["id"]: {"attempts": 2, "best_pct": 86, "completed": True} for s in j["training"]["sims"]}
+    for sid, p in progress.items():
+        conn.execute("INSERT INTO training_progress (user_id,program_id,sim_id,attempts,best_pct,completed_at) VALUES ('u_p',?,?,?,?,?)",
+                     (pid, sid, p["attempts"], p["best_pct"], 5 if p["completed"] else None))
+    j = journey(conn, content, user)
+    conn.close()
+    return j, progress
+
+
+@pytest.mark.parametrize("name", list(TRAINING_FIXTURES))
+def test_training_stage_agrees(page, tmp_path, name):
+    from phishverse.content import load
+    content = load()
+    fx = TRAINING_FIXTURES[name]
+    sessions = histories(content, fx)
+    pj, progress = python_journey_with_training(tmp_path, content, fx, sessions)
+    page.goto("about:blank")
+    page.add_script_tag(path=str(ROOT / "web" / "js" / "content-data.js"))
+    page.add_script_tag(path=str(ROOT / "web" / "js" / "rules.js"))
+    program = {"levels": fx["levels"], "due": "2099-12-31", "pass_mark": 70, "allow_watch_training": True, "created_at": PROGRAM_START}
+    jj = page.evaluate("([p, s, t]) => PVRules.journey(PV_CONTENT, PV_CONTENT.skills, p, s, null, '2026-01-01', t)", [program, sessions, progress])
+    keys = ("stages", "current", "next", "training")
+    assert {k: pj[k] for k in keys} == {k: jj[k] for k in keys}
+    if name == "training mastered":
+        assert pj["current"] == "test" and pj["next"]["label"] == "Final test: arrives in the next update"
+    else:
+        assert pj["next"]["label"] == "Continue your training plan"
+
+
+def answer_variants(r):
+    t = r["type"]
+    if t == "spot":
+        ids = [g["id"] for g in r["regions"]]
+        flags = sorted(g["id"] for g in r["regions"] if g["flag"])
+        return [[], flags, sorted(ids), ids[:1], flags[:-1] + [x for x in ids if x not in flags][:1]]
+    if t in ("realfake", "verify", "door"):
+        return list(range(len(r["options"])))
+    if t == "sort":
+        right = {i["id"]: "safe" if i["safe"] else "report" for i in r["items"]}
+        return [right, {i["id"]: "safe" for i in r["items"]}, {i["id"]: "report" for i in r["items"]}]
+    if t == "mfa":
+        n = len(r["prompts"])
+        return [[p["answer"] for p in r["prompts"]], ["approve"] * n, ["deny"] * n, ["report"] * n]
+    if t == "call":
+        paths = []
+
+        def walk(node, path):
+            for i, c in enumerate(r["nodes"][node]["choices"]):
+                if "end" in c:
+                    paths.append(path + [i])
+                else:
+                    walk(c["next"], path + [i])
+        walk("start", [])
+        return paths
+    raise AssertionError(t)
+
+
+def test_grading_agrees_on_every_round(page):
+    from phishverse.content import load
+    from phishverse.training import build_attempt, client_round, grade_round
+    content = load()
+    cases = []
+    for sim in content.training["simulations"]:
+        plan = build_attempt(sim, shuffle=False)
+        for entry in plan:
+            r = sim["rounds"][entry["r"]]
+            for ans in answer_variants(r):
+                cases.append({"sim": sim["id"], "r": entry["r"], "ans": ans, "py": grade_round(r, ans),
+                              "client": client_round(sim, entry)})
+    page.goto("about:blank")
+    page.add_script_tag(path=str(ROOT / "web" / "js" / "training-data.js"))
+    page.add_script_tag(path=str(ROOT / "web" / "js" / "rules.js"))
+    js = page.evaluate("""cases => cases.map(c => { const sim = PV_TRAINING_FULL.simulations.find(s => s.id === c.sim);
+        const plan = PVRules.buildAttempt(sim, false); const e = plan.find(p => p.r === c.r);
+        return {grade: PVRules.gradeRound(sim.rounds[c.r], c.ans), client: PVRules.clientRound(sim, e)} })""", cases)
+    assert len(cases) > 150
+    for c, j in zip(cases, js):
+        assert json.loads(json.dumps(c["py"])) == j["grade"], (c["sim"], c["r"], c["ans"])
+        assert json.loads(json.dumps(c["client"])) == j["client"], (c["sim"], c["r"])

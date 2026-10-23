@@ -396,3 +396,15 @@
 .people-table th:nth-child(3),.people-table td[data-col="status"]{width:210px}
 .people-table .status-cell small{white-space:normal;line-height:1.35}
 @media (max-width:767px){.people-table th:nth-child(3),.people-table td[data-col="status"]{width:auto}}
+/* training plan (#plan) and the drawer's simulation list */
+.sim-row .lvl-body{display:grid;gap:4px;justify-items:start}
+.sim-skill{font-weight:700;letter-spacing:.02em}
+.sim-row[data-state="todo"] .lvl-node{color:var(--ink-2)}
+.plan-progress{display:grid;gap:var(--s-2);margin-bottom:var(--s-4);font-size:var(--t-sm)}
+.plan-done{display:flex;gap:var(--s-3);align-items:flex-start}
+.plan-done h2{font-size:var(--t-lg);margin:0 0 var(--s-1)}
+.plan-done p{margin:0;color:var(--ink-2)}
+.sim-status{list-style:none;margin:var(--s-2) 0 0;padding:0;display:grid;gap:var(--s-2)}
+.sim-status li{display:flex;gap:var(--s-3);align-items:center;justify-content:space-between;padding:var(--s-2) var(--s-3);border:1px solid var(--line);border-radius:var(--r-md);background:var(--surface)}
+.sim-status b{display:block;font-size:var(--t-sm)}
+.sim-status small{display:block;font-size:var(--t-xs);color:var(--ink-2)}

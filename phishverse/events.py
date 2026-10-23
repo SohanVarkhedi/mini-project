@@ -20,7 +20,8 @@ from .db import connect, get_db, now_ms
 
 bp = Blueprint("events", __name__, url_prefix="/api")
 
-KINDS = {"joined", "assigned", "unassigned", "level_started", "level_finished", "nudge_sent", "report_ready", "plan_updated"}
+KINDS = {"joined", "assigned", "unassigned", "level_started", "level_finished", "nudge_sent", "report_ready", "plan_updated",
+         "training_started", "training_progress", "training_completed"}
 NUDGE_MAX_CHARS = 140
 NUDGE_INTERVAL_MS = 10 * 60 * 1000
 PAGE = 100

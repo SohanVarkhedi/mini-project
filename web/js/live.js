@@ -1,6 +1,6 @@
 /* =========================================================
    LIVE: team activity in real time (Server-Sent Events from /api/events).
-   Live.start(lastId) · Live.stop() · Live.on(kind | '*', fn) · Live.onStatus(fn) · Live.status
+   Live.start(lastId) · Live.stop() · Live.on(kind | '*', fn) · Live.onStatus(fn) · Live.emit(ev) · Live.status
    Status: 'connected' | 'reconnecting' | 'offline'. Falls back to polling /api/activity every 10 s
    when EventSource fails, and retries the stream every minute. Live.simulate(events) drives the
    same listeners on a timer for demo mode.
@@ -40,5 +40,6 @@ const Live=(()=>{
   function simulate(makeEvent,everyMs=6000){stop();mode='demo';setStatus('connected');let i=0;simTimer=setInterval(()=>{const ev=makeEvent(i++);if(ev)dispatch(ev)},everyMs)}
   /* browsers pause timers in background tabs; check the stream when the tab comes back */
   document.addEventListener('visibilitychange',()=>{if(!document.hidden&&mode==='sse'&&(!es||es.readyState===EventSource.CLOSED))openStream()});
-  return{start,stop,on,onStatus,simulate,get status(){return status},get mode(){return mode},get lastId(){return lastId}};
+  /* demo/live modes: events made on this device (training) go through the same listeners */
+  return{start,stop,on,onStatus,simulate,emit:dispatch,get status(){return status},get mode(){return mode},get lastId(){return lastId}};
 })();
